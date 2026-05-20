@@ -1,0 +1,263 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Dashboard - Attendify{% endblock %}
+
+{% block content %}
+<div class="dashboard-container fade-in-up" style="max-width: 1000px; margin: 0 auto;">
+    
+    <!-- Header Section -->
+    <header class="dashboard-header glass-effect" style="flex-wrap: wrap;">
+        <div class="profile-info">
+            <div class="avatar" style="background: linear-gradient(135deg, var(--danger), var(--warning));">
+                <i class="fa-solid fa-user-shield"></i>
+            </div>
+            <div class="student-details">
+                <h2>Admin Dashboard</h2>
+                <div class="badges">
+                    <span class="badge badge-primary">Super Admin</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="header-actions" style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
+            <div class="date-selection" style="display: flex; align-items: center; gap: 1rem;">
+                <form method="GET" action="{{ url_for('admin_dashboard') }}" style="display: flex; gap: 0.5rem; align-items: center;">
+                    <label for="date" style="font-weight: 600;">Date:</label>
+                    <input type="date" id="date" name="date" value="{{ target_date }}" class="form-control" style="padding: 0.5rem; border-radius: 8px;">
+                    <button type="submit" class="btn btn-primary" style="padding: 0.5rem 1rem;"><i class="fa-solid fa-eye"></i> View</button>
+                </form>
+            </div>
+            
+            <a href="{{ url_for('export_excel', date=target_date) }}" class="btn btn-success" style="padding: 0.5rem 1rem;">
+                <i class="fa-solid fa-file-excel"></i> Export Excel
+            </a>
+            <button class="btn btn-primary" onclick="document.getElementById('add-student-section').style.display='block'" style="padding: 0.5rem 1rem;">
+                <i class="fa-solid fa-user-plus"></i> Add Student
+            </button>
+        </div>
+    </header>
+
+    <!-- Add Student Section (Hidden by default) -->
+    <div id="add-student-section" class="glass-effect fade-in-up" style="display: none; margin-bottom: 1.5rem; padding: 1.5rem;">
+        <div class="section-header" style="display: flex; justify-content: space-between; align-items: center;">
+            <h3><i class="fa-solid fa-user-plus"></i> Add New Student</h3>
+            <button class="btn-logout" onclick="document.getElementById('add-student-section').style.display='none'" style="background: none; border: none; color: var(--danger); cursor: pointer; font-size: 1.2rem;">
+                <i class="fa-solid fa-circle-xmark"></i>
+            </button>
+        </div>
+        <form method="POST" action="{{ url_for('admin_add_student') }}" class="auth-form" style="margin-top: 1rem;">
+            <div class="form-row">
+                <div class="form-group half-width">
+                    <label>Register Number</label>
+                    <input type="text" name="register_number" class="form-control" required style="padding-left: 1rem;">
+                </div>
+                <div class="form-group half-width">
+                    <label>Full Name</label>
+                    <input type="text" name="name" class="form-control" required style="padding-left: 1rem;">
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group half-width">
+                    <label>Course</label>
+                    <select name="course" class="form-control" required style="padding-left: 1rem;">
+                        <option value="" disabled selected>Select Course</option>
+                        <option value="ADAD">ADAD</option>
+                        <option value="ADCHN">ADCHN</option>
+                        <option value="ADDA">ADDA</option>
+                        <option value="ADJP">ADJP</option>
+                        <option value="ADMS">ADMS</option>
+                        <option value="ADPP">ADPP</option>
+                        <option value="ADCA">ADCA</option>
+                        <option value="DCA">DCA</option>
+                        <option value="DFJD">DFJD</option>
+                        <option value="DFPD">DFPD</option>
+                        <option value="DMO">DMO</option>
+                        <option value="DPFD">DPFD</option>
+                        <option value="HDCA">HDCA</option>
+                        <option value="HDFD">HDFD</option>
+                        <option value="MDSA">MDSA</option>
+                        <option value="CCAE">CCAE</option>
+                        <option value="CCA">CCA</option>
+                        <option value="JDCS">JDCS</option>
+                    </select>
+                </div>
+                <div class="form-group half-width">
+                    <label>Mobile</label>
+                    <input type="text" name="mobile" class="form-control" required style="padding-left: 1rem;">
+                </div>
+            </div>
+
+            <!-- Course Reference Guide Placeholders -->
+            <div class="form-row">
+                <div class="form-group full-width" style="margin-bottom: 0.5rem;">
+                    <details class="course-guide-details">
+                        <summary class="course-guide-summary">
+                            <i class="fa-solid fa-circle-info"></i>
+                            <span>Course Reference Guide (View Full Names)</span>
+                            <i class="fa-solid fa-chevron-down toggle-icon"></i>
+                        </summary>
+                        <div class="course-guide-content">
+                            <ul>
+                                <li>ADAD – AI & Data Science</li>
+                                <li>ADCHN – Hardware & Networking</li>
+                                <li>ADDA – Data Analytics</li>
+                                <li>ADJP – Java Programming</li>
+                                <li>ADMS – MERN / MEAN Stack</li>
+                                <li>ADPP – Python Programming</li>
+                                <li>ADCA – Computer Application</li>
+
+                                <li>DCA – Computer Application</li>
+                                <li>DFJD – Full Stack Java Developer</li>
+                                <li>DFPD – Full Stack Python Developer</li>
+                                <li>DMO – MS Office</li>
+                                <li>DPFD – PHP Full Stack Developer</li>
+
+                                <li>HDCA – Honours Computer Application</li>
+                                <li>HDFD – Honours Full Stack Developer</li>
+
+                                <li>MDSA – System Administration</li>
+
+                                <li>CCAE – Advanced Excel</li>
+                                <li>CCA – Certified Computer Accountant</li>
+
+                                <li>JDCS – Junior Digital Computer Skills</li>
+                            </ul>
+                        </div>
+                    </details>
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group full-width">
+                    <label>Password (Default: 123456)</label>
+                    <input type="password" name="password" class="form-control" value="123456" required style="padding-left: 1rem;">
+                </div>
+            </div>
+            <button type="submit" class="btn btn-primary">Create Student Account</button>
+        </form>
+    </div>
+
+    <!-- OTP PIN Control Section -->
+    <div class="pin-control-card glass-effect fade-in-up" style="margin-bottom: 1.5rem; padding: 1.5rem; display: flex; justify-content: space-between; align-items: center;">
+        <div class="pin-info">
+            <h3 style="margin-bottom: 0.5rem;"><i class="fa-solid fa-key"></i> Student Attendance PIN</h3>
+            <p style="color: var(--text-muted);">Students must enter this PIN to mark their attendance.</p>
+        </div>
+        <div class="pin-display-wrapper" style="display: flex; align-items: center; gap: 2rem;">
+            <div class="current-pin-box">
+                <span class="pin-label">CURRENT PIN:</span>
+                <span class="pin-value">{{ current_pin if current_pin else '----' }}</span>
+            </div>
+            <form method="POST" action="{{ url_for('generate_pin') }}">
+                <button type="submit" class="btn btn-primary btn-lg">
+                    <i class="fa-solid fa-rotate"></i> Generate New PIN
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Students List -->
+    <div class="history-section glass-effect">
+        <div class="section-header">
+            <h3><i class="fa-solid fa-users-gear"></i> Student Attendance for {{ target_date }}</h3>
+        </div>
+        
+        <div class="table-responsive" style="max-height: 500px;">
+            <table class="history-table">
+                <thead>
+                    <tr>
+                        <th>Reg No</th>
+                        <th>Name</th>
+                        <th>Course</th>
+                        <th>Status</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for student in students %}
+                    <tr>
+                        <td><strong>{{ student.register_number }}</strong></td>
+                        <td>{{ student.name }}</td>
+                        <td>{{ student.course }}</td>
+                        <td>
+                            {% if student.status == 'Present' %}
+                                <span class="status-badge status-present">Present</span>
+                            {% elif student.status == 'Absent' %}
+                                <span class="status-badge status-absent">Absent</span>
+                            {% else %}
+                                <span class="status-badge" style="background: var(--light); color: var(--text-muted);">Not Marked</span>
+                            {% endif %}
+                        </td>
+                        <td style="display: flex; gap: 0.5rem;">
+                            <form method="POST" action="{{ url_for('update_attendance') }}" style="display: flex; gap: 0.5rem;">
+                                <input type="hidden" name="student_id" value="{{ student.id }}">
+                                <input type="hidden" name="date" value="{{ target_date }}">
+                                
+                                <select name="status" class="form-control" style="padding: 0.3rem; border-radius: 6px; width: 120px;" onchange="this.form.submit()">
+                                    <option value="" disabled selected>Change...</option>
+                                    <option value="Present" {% if student.status == 'Present' %}disabled{% endif %}>Mark Present</option>
+                                    <option value="Absent" {% if student.status == 'Absent' %}disabled{% endif %}>Mark Absent</option>
+                                </select>
+                            </form>
+                            <form method="POST" action="{{ url_for('admin_delete_student', student_id=student.id) }}" style="display: inline;" onsubmit="return confirm('Delete student {{ student.name }}? All their attendance records will be lost.')">
+                                <button type="submit" class="btn btn-danger" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;">
+                                    <i class="fa-solid fa-trash-can"></i>
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% if not students %}
+                <div class="empty-state">
+                    <p>No students registered yet.</p>
+                </div>
+            {% endif %}
+        </div>
+
+    <!-- Danger Zone: Clear Database -->
+    <div class="danger-section glass-effect fade-in-up" style="margin-top: 2rem; border-color: rgba(239, 68, 68, 0.3);">
+        <div class="section-header" style="border-bottom-color: rgba(239, 68, 68, 0.2);">
+            <h3 style="color: var(--danger);"><i class="fa-solid fa-triangle-exclamation"></i> Danger Zone</h3>
+        </div>
+        <div class="danger-body" style="padding: 1.5rem; display: flex; flex-direction: column; gap: 1.5rem;">
+            <div class="danger-info">
+                <h4 style="margin-bottom: 0.5rem; color: var(--dark);">Clear Entire Database</h4>
+                <p style="color: var(--text-muted); font-size: 0.95rem;">This will delete all student records and attendance history. This action is <strong>irreversible</strong>.</p>
+            </div>
+            
+            <form method="POST" action="{{ url_for('clear_db') }}" class="clear-db-form" style="display: flex; gap: 1.2rem; align-items: flex-end; flex-wrap: wrap;">
+                <div class="form-group" style="margin-bottom: 0; flex: 1; min-width: 200px;">
+                    <label style="font-size: 0.85rem; font-weight: 600; color: var(--dark); margin-bottom: 0.4rem; display: block;">Step 1: Admin Password</label>
+                    <div class="input-icon-wrapper">
+                        <i class="fa-solid fa-lock input-icon"></i>
+                        <input type="password" name="password1" class="form-control" placeholder="Enter Admin Password" required style="padding-left: 2.8rem;">
+                    </div>
+                </div>
+                
+                <div class="form-group" style="margin-bottom: 0; flex: 1; min-width: 200px;">
+                    <label style="font-size: 0.85rem; font-weight: 600; color: var(--dark); margin-bottom: 0.4rem; display: block;">Step 2: Clear Secret Key</label>
+                    <div class="input-icon-wrapper">
+                        <i class="fa-solid fa-shield-halved input-icon"></i>
+                        <input type="password" name="password2" class="form-control" placeholder="Enter Clear Secret" required style="padding-left: 2.8rem;">
+                    </div>
+                </div>
+                
+                <div class="form-group" style="margin-bottom: 0; flex: 1; min-width: 200px;">
+                    <label style="font-size: 0.85rem; font-weight: 600; color: var(--dark); margin-bottom: 0.4rem; display: block;">Type "yes" to confirm</label>
+                    <div class="input-icon-wrapper">
+                        <i class="fa-solid fa-circle-check input-icon"></i>
+                        <input type="text" name="confirm" class="form-control" placeholder='Type "yes"' required style="padding-left: 2.8rem;">
+                    </div>
+                </div>
+                
+                <button type="submit" class="btn btn-danger" style="height: 45px; padding: 0 1.5rem;" onclick="return confirm('ARE YOU ABSOLUTELY SURE? This will permanently wipe all data!')">
+                    <i class="fa-solid fa-trash-can"></i> WIPE DATABASE
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

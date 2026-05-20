@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+
+{% block title %}Login - Attendify{% endblock %}
+
+{% block content %}
+<div class="auth-container glass-effect fade-in-up">
+    <div class="auth-header">
+        <div class="auth-icon">
+            <i class="fa-solid fa-user-lock"></i>
+        </div>
+        <h2>Welcome Back</h2>
+        <p>Login to your Attendify dashboard</p>
+    </div>
+
+    <form method="POST" action="{{ url_for('login') }}" class="auth-form">
+        <div class="form-group">
+            <label for="register_number">Register Number</label>
+            <div class="input-icon-wrapper">
+                <i class="fa-solid fa-id-card input-icon"></i>
+                <input type="text" id="register_number" name="register_number" class="form-control" placeholder="e.g. CSC2023001" required autocomplete="off">
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label for="password">Password</label>
+            <div class="input-icon-wrapper">
+                <i class="fa-solid fa-lock input-icon"></i>
+                <input type="password" id="password" name="password" class="form-control" placeholder="Enter your password" required>
+            </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-block">
+            <span>Login</span>
+            <i class="fa-solid fa-arrow-right"></i>
+        </button>
+    </form>
+
+    <div class="auth-footer">
+        <p>Don't have an account? <a href="{{ url_for('register') }}" class="text-link">Register here</a></p>
+    </div>
+</div>
+{% endblock %}

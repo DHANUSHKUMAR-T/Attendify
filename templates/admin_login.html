@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Login - Attendify{% endblock %}
+
+{% block content %}
+<div class="auth-container glass-effect fade-in-up">
+    <div class="auth-header">
+        <div class="auth-icon" style="background: linear-gradient(135deg, var(--danger), var(--warning));">
+            <i class="fa-solid fa-shield-halved"></i>
+        </div>
+        <h2>Admin Portal</h2>
+        <p>Login to manage student attendance</p>
+    </div>
+
+    <form method="POST" action="{{ url_for('admin_login') }}" class="auth-form">
+        <div class="form-group">
+            <label for="password">Admin Password</label>
+            <div class="input-icon-wrapper">
+                <i class="fa-solid fa-key input-icon"></i>
+                <input type="password" id="password" name="password" class="form-control" placeholder="Enter admin password" required>
+            </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-block" style="background: var(--danger);">
+            <span>Login as Admin</span>
+            <i class="fa-solid fa-arrow-right"></i>
+        </button>
+    </form>
+    
+    <div class="auth-footer">
+        <p>Student? <a href="{{ url_for('login') }}" class="text-link">Login here</a></p>
+    </div>
+</div>
+{% endblock %}

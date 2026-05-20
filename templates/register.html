@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+
+{% block title %}Register - Attendify{% endblock %}
+
+{% block content %}
+<div class="auth-container register-container glass-effect fade-in-up">
+    <div class="auth-header">
+        <div class="auth-icon">
+            <i class="fa-solid fa-user-plus"></i>
+        </div>
+        <h2>Create Account</h2>
+        <p>Join Attendify to manage your attendance</p>
+    </div>
+
+    <form method="POST" action="{{ url_for('register') }}" class="auth-form">
+        <div class="form-row">
+            <div class="form-group half-width">
+                <label for="register_number">Register Number *</label>
+                <div class="input-icon-wrapper">
+                    <i class="fa-solid fa-id-card input-icon"></i>
+                    <input type="text" id="register_number" name="register_number" class="form-control" value="{{ form.get('register_number', '') }}" placeholder="MJxxxx" required>
+                </div>
+            </div>
+
+            <div class="form-group half-width">
+                <label for="name">Full Name *</label>
+                <div class="input-icon-wrapper">
+                    <i class="fa-solid fa-user input-icon"></i>
+                    <input type="text" id="name" name="name" class="form-control" value="{{ form.get('name', '') }}" placeholder="John Doe" required>
+                </div>
+            </div>
+        </div>
+
+        <div class="form-row">
+            <div class="form-group half-width">
+                <label for="course">Course *</label>
+                <div class="input-icon-wrapper">
+                    <i class="fa-solid fa-graduation-cap input-icon"></i>
+                    <select id="course" name="course" class="form-control" required>
+                        <option value="" disabled selected>Select Course</option>
+                        <option value="ADAD" {% if form.get('course') == 'ADAD' %}selected{% endif %}>ADAD</option>
+                        <option value="ADCHN" {% if form.get('course') == 'ADCHN' %}selected{% endif %}>ADCHN</option>
+                        <option value="ADDA" {% if form.get('course') == 'ADDA' %}selected{% endif %}>ADDA</option>
+                        <option value="ADJP" {% if form.get('course') == 'ADJP' %}selected{% endif %}>ADJP</option>
+                        <option value="ADMS" {% if form.get('course') == 'ADMS' %}selected{% endif %}>ADMS</option>
+                        <option value="ADPP" {% if form.get('course') == 'ADPP' %}selected{% endif %}>ADPP</option>
+                        <option value="ADCA" {% if form.get('course') == 'ADCA' %}selected{% endif %}>ADCA</option>
+                        <option value="DCA" {% if form.get('course') == 'DCA' %}selected{% endif %}>DCA</option>
+                        <option value="DFJD" {% if form.get('course') == 'DFJD' %}selected{% endif %}>DFJD</option>
+                        <option value="DFPD" {% if form.get('course') == 'DFPD' %}selected{% endif %}>DFPD</option>
+                        <option value="DMO" {% if form.get('course') == 'DMO' %}selected{% endif %}>DMO</option>
+                        <option value="DPFD" {% if form.get('course') == 'DPFD' %}selected{% endif %}>DPFD</option>
+                        <option value="HDCA" {% if form.get('course') == 'HDCA' %}selected{% endif %}>HDCA</option>
+                        <option value="HDFD" {% if form.get('course') == 'HDFD' %}selected{% endif %}>HDFD</option>
+                        <option value="MDSA" {% if form.get('course') == 'MDSA' %}selected{% endif %}>MDSA</option>
+                        <option value="CCAE" {% if form.get('course') == 'CCAE' %}selected{% endif %}>CCAE</option>
+                        <option value="CCA" {% if form.get('course') == 'CCA' %}selected{% endif %}>CCA</option>
+                        <option value="JDCS" {% if form.get('course') == 'JDCS' %}selected{% endif %}>JDCS</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-group half-width">
+                <label for="mobile">Mobile Number *</label>
+                <div class="input-icon-wrapper">
+                    <i class="fa-solid fa-phone input-icon"></i>
+                    <input type="tel" id="mobile" name="mobile" class="form-control" value="{{ form.get('mobile', '') }}" placeholder="10-digit number" pattern="[0-9]{10}" required>
+                </div>
+            </div>
+        </div>
+
+        <!-- Course Reference Guide Placeholders -->
+        <div class="form-row">
+            <div class="form-group full-width" style="margin-bottom: 0.5rem;">
+                <details class="course-guide-details">
+                    <summary class="course-guide-summary">
+                        <i class="fa-solid fa-circle-info"></i>
+                        <span>Course Reference Guide (View Full Names)</span>
+                        <i class="fa-solid fa-chevron-down toggle-icon"></i>
+                    </summary>
+                    <div class="course-guide-content">
+                        <ul>
+                            <li>ADAD – AI & Data Science</li>
+                            <li>ADCHN – Hardware & Networking</li>
+                            <li>ADDA – Data Analytics</li>
+                            <li>ADJP – Java Programming</li>
+                            <li>ADMS – MERN / MEAN Stack</li>
+                            <li>ADPP – Python Programming</li>
+                            <li>ADCA – Computer Application</li>
+
+                            <li>DCA – Computer Application</li>
+                            <li>DFJD – Full Stack Java Developer</li>
+                            <li>DFPD – Full Stack Python Developer</li>
+                            <li>DMO – MS Office</li>
+                            <li>DPFD – PHP Full Stack Developer</li>
+
+                            <li>HDCA – Honours Computer Application</li>
+                            <li>HDFD – Honours Full Stack Developer</li>
+
+                            <li>MDSA – System Administration</li>
+
+                            <li>CCAE – Advanced Excel</li>
+                            <li>CCA – Certified Computer Accountant</li>
+
+                            <li>JDCS – Junior Digital Computer Skills</li>
+                        </ul>
+                    </div>
+                </details>
+            </div>
+        </div>
+
+        <div class="form-row">
+            <div class="form-group full-width">
+                <label for="alt_mobile">Alternative Mobile Number (Optional)</label>
+                <div class="input-icon-wrapper">
+                    <i class="fa-solid fa-phone-flip input-icon"></i>
+                    <input type="tel" id="alt_mobile" name="alt_mobile" class="form-control" value="{{ form.get('alt_mobile', '') }}" placeholder="10-digit number" pattern="[0-9]{10}">
+                </div>
+            </div>
+        </div>
+
+        <div class="form-row">
+            <div class="form-group half-width">
+                <label for="password">Password *</label>
+                <div class="input-icon-wrapper">
+                    <i class="fa-solid fa-lock input-icon"></i>
+                    <input type="password" id="password" name="password" class="form-control" placeholder="Min 6 characters" required minlength="6">
+                </div>
+            </div>
+
+            <div class="form-group half-width">
+                <label for="confirm_password">Confirm Password *</label>
+                <div class="input-icon-wrapper">
+                    <i class="fa-solid fa-lock-check input-icon"></i>
+                    <input type="password" id="confirm_password" name="confirm_password" class="form-control" placeholder="Re-enter password" required minlength="6">
+                </div>
+            </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-block mt-4">
+            <span>Register Now</span>
+            <i class="fa-solid fa-user-plus"></i>
+        </button>
+    </form>
+
+    <div class="auth-footer">
+        <p>Already have an account? <a href="{{ url_for('login') }}" class="text-link">Login here</a></p>
+    </div>
+</div>
+{% endblock %}

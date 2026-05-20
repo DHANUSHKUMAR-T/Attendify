@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Attendify{% endblock %}
+
+{% block content %}
+<div class="dashboard-container fade-in-up">
+    
+    <!-- Header Section -->
+    <header class="dashboard-header glass-effect">
+        <div class="profile-info">
+            <div class="avatar">
+                {{ session.get('student_name')[0]|upper }}
+            </div>
+            <div class="student-details">
+                <h2>{{ session.get('student_name') }}</h2>
+                <div class="badges">
+                    <span class="badge badge-primary"><i class="fa-solid fa-id-card"></i> {{ session.get('register_number') }}</span>
+                    <span class="badge badge-secondary"><i class="fa-solid fa-graduation-cap"></i> {{ session.get('course') }}</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="date-display">
+            <i class="fa-regular fa-calendar-days"></i>
+            <span>{{ today }}</span>
+        </div>
+    </header>
+
+    <!-- Stats Grid -->
+    <div class="stats-grid">
+        <div class="stat-card glass-effect">
+            <div class="stat-icon icon-blue">
+                <i class="fa-solid fa-list-check"></i>
+            </div>
+            <div class="stat-content">
+                <h3>Total Classes</h3>
+                <p class="stat-value">{{ total }}</p>
+            </div>
+        </div>
+        
+        <div class="stat-card glass-effect">
+            <div class="stat-icon icon-green">
+                <i class="fa-solid fa-user-check"></i>
+            </div>
+            <div class="stat-content">
+                <h3>Present</h3>
+                <p class="stat-value">{{ present }}</p>
+            </div>
+        </div>
+        
+        <div class="stat-card glass-effect">
+            <div class="stat-icon icon-red">
+                <i class="fa-solid fa-user-xmark"></i>
+            </div>
+            <div class="stat-content">
+                <h3>Absent</h3>
+                <p class="stat-value">{{ absent }}</p>
+            </div>
+        </div>
+        
+        <div class="stat-card glass-effect">
+            <div class="stat-icon icon-purple">
+                <i class="fa-solid fa-chart-pie"></i>
+            </div>
+            <div class="stat-content">
+                <h3>Percentage</h3>
+                <p class="stat-value">{{ percentage }}%</p>
+                <div class="progress-bar-container">
+                    <div class="progress-bar {% if percentage >= 75 %}bg-success{% elif percentage >= 60 %}bg-warning{% else %}bg-danger{% endif %}" style="width: {{ percentage }}%;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content Area -->
+    <div class="dashboard-content">
+        <!-- Mark Attendance Section -->
+        <div class="action-section glass-effect">
+            <div class="section-header">
+                <h3><i class="fa-solid fa-clipboard-user"></i> Today's Attendance</h3>
+            </div>
+            
+            <div class="action-body">
+                {% if already_marked %}
+                    <div class="attendance-status marked">
+                        <div class="status-icon {% if already_marked['status'] == 'Present' %}icon-green{% else %}icon-red{% endif %}">
+                            <i class="fa-solid {% if already_marked['status'] == 'Present' %}fa-check{% else %}fa-xmark{% endif %}"></i>
+                        </div>
+                        <div class="status-text">
+                            <h4>Attendance Recorded</h4>
+                            <p>You have been marked as <strong>{{ already_marked['status'] }}</strong> for today.</p>
+                        </div>
+                    </div>
+                {% else %}
+                    <div class="attendance-action">
+                        <p class="action-desc">Please mark your attendance for today.</p>
+                        <form method="POST" action="{{ url_for('mark_attendance') }}" class="attendance-form" style="flex-direction: column; max-width: 300px; margin: 0 auto;">
+                            <div class="form-group" style="width: 100%; text-align: left;">
+                                <label for="otp_pin" style="font-weight: 600;"><i class="fa-solid fa-key"></i> Enter OTP PIN:</label>
+                                <input type="text" id="otp_pin" name="otp_pin" class="form-control" placeholder="4-digit PIN" maxlength="4" required style="padding-left: 1rem; text-align: center; letter-spacing: 5px; font-size: 1.2rem; font-weight: 700;">
+                                <small style="color: var(--text-muted); display: block; margin-top: 0.5rem;">Ask your teacher for the current PIN.</small>
+                            </div>
+                            <div style="display: flex; gap: 1rem; width: 100%;">
+                                <button type="submit" name="status" value="Present" class="btn btn-success btn-lg" style="flex: 1;">
+                                    <i class="fa-solid fa-hand-sparkles"></i> Mark Present
+                                </button>
+                                <button type="submit" name="status" value="Absent" class="btn btn-danger btn-lg" style="flex: 1;">
+                                    <i class="fa-solid fa-bed"></i> Mark Absent
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- History Section -->
+        <div class="history-section glass-effect">
+            <div class="section-header">
+                <h3><i class="fa-solid fa-clock-rotate-left"></i> Attendance History</h3>
+            </div>
+            
+            <div class="table-responsive">
+                {% if history %}
+                    <table class="history-table">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for record in history %}
+                            <tr>
+                                <td>{{ record.date }}</td>
+                                <td>
+                                    <span class="status-badge status-{{ record.status|lower }}">
+                                        {{ record.status }}
+                                    </span>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                {% else %}
+                    <div class="empty-state">
+                        <div class="empty-icon">
+                            <i class="fa-regular fa-folder-open"></i>
+                        </div>
+                        <p>No attendance records found yet.</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}

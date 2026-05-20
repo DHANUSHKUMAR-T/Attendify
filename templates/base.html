@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Student Attendance System{% endblock %}</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <!-- FontAwesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="background-animation">
+        <div class="shape shape-1"></div>
+        <div class="shape shape-2"></div>
+        <div class="shape shape-3"></div>
+    </div>
+
+    <!-- Navigation Bar -->
+    <nav class="navbar glass-effect">
+        <div class="nav-brand">
+            <i class="fa-solid fa-graduation-cap"></i>
+            <span>Attendify</span>
+        </div>
+        <div class="nav-links">
+            {% if session.get('is_admin') %}
+                <span class="user-greeting">Hi, Admin</span>
+                <a href="{{ url_for('admin_dashboard') }}" class="nav-link"><i class="fa-solid fa-chart-line"></i> Admin Dashboard</a>
+                <a href="{{ url_for('admin_logout') }}" class="nav-link btn-logout"><i class="fa-solid fa-right-from-bracket"></i> Logout</a>
+            {% elif session.get('student_id') %}
+                <span class="user-greeting">Hi, {{ session.get('student_name') }}</span>
+                <a href="{{ url_for('dashboard') }}" class="nav-link"><i class="fa-solid fa-chart-line"></i> Dashboard</a>
+                <a href="{{ url_for('logout') }}" class="nav-link btn-logout"><i class="fa-solid fa-right-from-bracket"></i> Logout</a>
+            {% else %}
+                <a href="{{ url_for('login') }}" class="nav-link"><i class="fa-solid fa-right-to-bracket"></i> Login</a>
+                <a href="{{ url_for('register') }}" class="nav-link btn-register"><i class="fa-solid fa-user-plus"></i> Register</a>
+                <a href="{{ url_for('admin_login') }}" class="nav-link"><i class="fa-solid fa-shield-halved"></i> Admin</a>
+            {% endif %}
+        </div>
+    </nav>
+
+    <!-- Flash Messages Container -->
+    <div class="flash-messages-container">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="flash-alert alert-{{ category }}">
+                        <div class="alert-icon">
+                            {% if category == 'success' %}
+                                <i class="fa-solid fa-circle-check"></i>
+                            {% elif category == 'danger' %}
+                                <i class="fa-solid fa-circle-exclamation"></i>
+                            {% elif category == 'warning' %}
+                                <i class="fa-solid fa-triangle-exclamation"></i>
+                            {% else %}
+                                <i class="fa-solid fa-circle-info"></i>
+                            {% endif %}
+                        </div>
+                        <div class="alert-content">{{ message }}</div>
+                        <button type="button" class="close-alert" onclick="this.parentElement.style.display='none';">
+                            <i class="fa-solid fa-xmark"></i>
+                        </button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+    </div>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer glass-effect">
+        <p>&copy; {{ today[:4] if today else '2024' }} Attendify. Student Attendance Management System By DHANUSHKUMAR T</p>
+    </footer>
+
+    <script>
+        // Auto-hide flash messages after 5 seconds
+        document.addEventListener('DOMContentLoaded', function() {
+            setTimeout(function() {
+                const alerts = document.querySelectorAll('.flash-alert');
+                alerts.forEach(alert => {
+                    alert.style.opacity = '0';
+                    setTimeout(() => alert.style.display = 'none', 300);
+                });
+            }, 5000);
+        });
+    </script>
+</body>
+</html>
