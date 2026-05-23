@@ -26,11 +26,16 @@ app = Flask(__name__)
 app.secret_key = "sams_secret_key_2024"   # Change this in production!
 
 # MongoDB connection – use environment variable MONGO_URI
-MONGO_URI = os.getenv("MONGO_URI")
-if not MONGO_URI:
-    raise RuntimeError("MONGO_URI environment variable not set")
+# MongoDB Connection String
+MONGO_URI = "mongodb+srv://tdhanu:Dhanu123@clustersumma.ggzzczb.mongodb.net/attendance_db?retryWrites=true&w=majority&appName=ClusterSumma"
+
+# Connect MongoDB
 client = MongoClient(MONGO_URI)
+
+# Database
 db = client["attendance_db"]
+
+# Collections
 students_collection = db["students"]
 attendance_collection = db["attendance"]
 
