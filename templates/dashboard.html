@@ -70,6 +70,23 @@
                 </div>
             </div>
         </div>
+        
+        <div class="stat-card glass-effect">
+            <div class="stat-icon {% if student.balance|default(0) > 0 %}icon-red{% else %}icon-green{% endif %}">
+                <i class="fa-solid fa-wallet"></i>
+            </div>
+            <div class="stat-content">
+                <h3>Fee Balance</h3>
+                <p class="stat-value">₹{{ student.balance|default(0) }}</p>
+                <div class="status-indicator" style="margin-top: 0.5rem;">
+                    {% if student.balance|default(0) > 0 %}
+                        <span style="font-size: 0.85rem; font-weight: 600; color: var(--danger);"><i class="fa-solid fa-circle-exclamation"></i> Payment Pending</span>
+                    {% else %}
+                        <span style="font-size: 0.85rem; font-weight: 600; color: var(--success);"><i class="fa-solid fa-circle-check"></i> Fully Paid</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- Main Content Area -->
@@ -148,6 +165,52 @@
                             <i class="fa-regular fa-folder-open"></i>
                         </div>
                         <p>No attendance records found yet.</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Fee Payment History Section -->
+        <div class="history-section glass-effect" style="margin-top: 1.5rem; grid-column: span 2;">
+            <div class="section-header">
+                <h3><i class="fa-solid fa-file-invoice-dollar"></i> Fee Payment & Transaction History</h3>
+            </div>
+            <div class="table-responsive">
+                {% if student.payment_history %}
+                    <table class="history-table">
+                        <thead>
+                            <tr>
+                                <th>Date & Time</th>
+                                <th>Type</th>
+                                <th>Amount Change</th>
+                                <th>Remaining Balance</th>
+                                <th>Note</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for record in student.payment_history|reverse %}
+                            <tr>
+                                <td>{{ record.date }}</td>
+                                <td>
+                                    <span class="status-badge" style="background: {% if record.type == 'Payment Received' %}rgba(16, 185, 129, 0.15); color: var(--success);{% else %}rgba(79, 70, 229, 0.15); color: var(--primary);{% endif %} border: none; padding: 0.2rem 0.5rem; border-radius: 6px; font-size: 0.8rem; font-weight: 600; display: inline-block;">
+                                        {{ record.type }}
+                                    </span>
+                                </td>
+                                <td style="font-weight: 600; color: {% if record.type == 'Payment Received' %}var(--success){% else %}var(--primary){% endif %};">
+                                    {% if record.type == 'Payment Received' %}-{% else %}+{% endif %}₹{{ record.amount|abs }}
+                                </td>
+                                <td style="font-weight: bold; color: {% if record.new_balance > 0 %}var(--danger){% else %}var(--success){% endif %};">₹{{ record.new_balance }}</td>
+                                <td><span style="color: var(--text-muted); font-size: 0.9rem;">{{ record.note }}</span></td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                {% else %}
+                    <div class="empty-state">
+                        <div class="empty-icon" style="font-size: 2.5rem; color: var(--text-muted); margin-bottom: 0.5rem;">
+                            <i class="fa-solid fa-receipt"></i>
+                        </div>
+                        <p style="color: var(--text-muted); margin: 0;">No fee payment records found.</p>
                     </div>
                 {% endif %}
             </div>

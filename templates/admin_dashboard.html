@@ -170,6 +170,7 @@
                         <th>Reg No</th>
                         <th>Name</th>
                         <th>Course</th>
+                        <th>Fee Balance</th>
                         <th>Status</th>
                         <th>Action</th>
                     </tr>
@@ -181,6 +182,11 @@
                         <td>{{ student.name }}</td>
                         <td>{{ student.course }}</td>
                         <td>
+                            <span style="font-weight: 700; color: {% if student.balance|default(0) > 0 %}var(--danger){% else %}var(--success){% endif %};">
+                                ₹{{ student.balance|default(0) }}
+                            </span>
+                        </td>
+                        <td>
                             {% if student.status == 'Present' %}
                                 <span class="status-badge status-present">Present</span>
                             {% elif student.status == 'Absent' %}
@@ -189,7 +195,7 @@
                                 <span class="status-badge" style="background: var(--light); color: var(--text-muted);">Not Marked</span>
                             {% endif %}
                         </td>
-                        <td style="display: flex; gap: 0.5rem;">
+                        <td style="display: flex; gap: 0.5rem; align-items: center;">
                             <form method="POST" action="{{ url_for('update_attendance') }}" style="display: flex; gap: 0.5rem;">
                                 <input type="hidden" name="student_id" value="{{ student.id }}">
                                 <input type="hidden" name="date" value="{{ target_date }}">
@@ -200,8 +206,11 @@
                                     <option value="Absent" {% if student.status == 'Absent' %}disabled{% endif %}>Mark Absent</option>
                                 </select>
                             </form>
-                            <form method="POST" action="{{ url_for('admin_delete_student', student_id=student.id) }}" style="display: inline;" onsubmit="return confirm('Delete student {{ student.name }}? All their attendance records will be lost.')">
-                                <button type="submit" class="btn btn-danger" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;">
+                            <a href="{{ url_for('manage_money', student_id=student.id) }}" class="btn" style="background: var(--success); color: white; padding: 0.3rem 0.6rem; font-size: 0.8rem; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; height: 31px; width: 31px;" title="Manage Money">
+                                <i class="fa-solid fa-wallet"></i>
+                            </a>
+                            <form method="POST" action="{{ url_for('admin_delete_student', student_id=student.id) }}" style="display: inline; margin-bottom: 0;" onsubmit="return confirm('Delete student {{ student.name }}? All their attendance records will be lost.')">
+                                <button type="submit" class="btn btn-danger" style="padding: 0.3rem 0.6rem; font-size: 0.8rem; height: 31px; width: 31px; display: inline-flex; align-items: center; justify-content: center;">
                                     <i class="fa-solid fa-trash-can"></i>
                                 </button>
                             </form>

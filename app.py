@@ -26,16 +26,9 @@ app = Flask(__name__)
 app.secret_key = "sams_secret_key_2024"   # Change this in production!
 
 # MongoDB connection – use environment variable MONGO_URI
-# MongoDB Connection String
-MONGO_URI = "mongodb+srv://tdhanu:Dhanu123@clustersumma.ggzzczb.mongodb.net/attendance_db?retryWrites=true&w=majority&appName=ClusterSumma"
-
-# Connect MongoDB
+MONGO_URI="mongodb+srv://tdhanu:Dhanu123@clustersumma.ggzzczb.mongodb.net/attendance_db?retryWrites=true&w=majority&appName=ClusterSumma"
 client = MongoClient(MONGO_URI)
-
-# Database
 db = client["attendance_db"]
-
-# Collections
 students_collection = db["students"]
 attendance_collection = db["attendance"]
 
@@ -204,6 +197,8 @@ def dashboard():
     absent = total - present
     pct = round((present / total * 100), 1) if total > 0 else 0
 
+    student = students_collection.find_one({"_id": ObjectId(student_id)})
+
     return render_template(
         "dashboard.html",
         today=today,
@@ -212,7 +207,8 @@ def dashboard():
         total=total,
         present=present,
         absent=absent,
-        percentage=pct
+        percentage=pct,
+        student=student
     )
 
 # ── Mark Attendance ───────────────────────
@@ -280,7 +276,7 @@ def admin_logout():
 @admin_required
 def admin_dashboard():
     target_date = request.args.get("date", date.today().isoformat())
-    students = list(students_collection.find({}, {"register_number": 1, "name": 1, "course": 1}))
+    students = list(students_collection.find({}, {"register_number": 1, "name": 1, "course": 1, "balance": 1}))
     attendance_records = list(attendance_collection.find({"date": target_date}, {"student_id": 1, "status": 1}))
     att_map = {str(rec["student_id"]): rec["status"] for rec in attendance_records}
     student_data = []
@@ -291,6 +287,7 @@ def admin_dashboard():
             "register_number": s["register_number"],
             "name": s["name"],
             "course": s["course"],
+            "balance": s.get("balance", 0),
             "status": att_map.get(sid, "Not Marked")
         })
     return render_template("admin_dashboard.html", students=student_data, target_date=target_date, current_pin=CURRENT_PIN)
@@ -368,41 +365,116 @@ def generate_pin():
 @app.route("/admin/export_excel")
 @admin_required
 def export_excel():
-    target_date = request.args.get("date", date.today().isoformat())
-    records = list(attendance_collection.aggregate([
-        {"$match": {"date": target_date}},
-        {"$lookup": {
-            "from": "students",
-            "localField": "student_id",
-            "foreignField": "_id",
-            "as": "student"
-        }},
-        {"$unwind": "$student"},
-        {"$project": {
-            "register_number": "$student.register_number",
-            "name": "$student.name",
-            "course": "$student.course",
-            "status": "$status"
-        }},
-        {"$sort": {"register_number": 1}}
-    ]))
+    from openpyxl.styles import PatternFill
+    
+    # 1. Fetch all unique dates sorted chronologically
+    sorted_dates = sorted(list(attendance_collection.distinct("date")))
+    
+    # 2. Fetch all students sorted by register number
+    students = list(students_collection.find({}, {"register_number": 1, "name": 1, "course": 1, "balance": 1}).sort("register_number", 1))
+    
+    # 3. Fetch all attendance records
+    attendance_records = list(attendance_collection.find())
+    
+    # 4. Map (student_id_str, date) -> status
+    att_map = {}
+    for r in attendance_records:
+        att_map[(str(r["student_id"]), r["date"])] = r["status"]
+        
     wb = openpyxl.Workbook()
     ws = wb.active
-    ws.title = f"Attendance_{target_date}"
-    headers = ["Register Number", "Name", "Course", "Status"]
+    ws.title = "Master Attendance"
+    
+    # Headers
+    headers = ["Register Number", "Name", "Course", "Outstanding Balance"]
+    formatted_dates = []
+    for d in sorted_dates:
+        try:
+            fd = datetime.strptime(d, "%Y-%m-%d").strftime("%d/%m/%Y")
+        except Exception:
+            fd = d
+        formatted_dates.append(fd)
+        
+    headers.extend(formatted_dates)
     ws.append(headers)
+    
+    # Style headers
+    header_fill = PatternFill(start_color="4F46E5", end_color="4F46E5", fill_type="solid")
+    header_font = Font(name="Inter", size=11, bold=True, color="FFFFFF")
     for cell in ws[1]:
-        cell.font = Font(bold=True)
-    for r in records:
-        ws.append([r.get("register_number"), r.get("name"), r.get("course"), r.get("status")])
+        cell.font = header_font
+        cell.fill = header_fill
+        
+    # Soft fills for statuses
+    present_fill = PatternFill(start_color="D1FAE5", end_color="D1FAE5", fill_type="solid")
+    absent_fill = PatternFill(start_color="FEE2E2", end_color="FEE2E2", fill_type="solid")
+    not_marked_fill = PatternFill(start_color="F3F4F6", end_color="F3F4F6", fill_type="solid")
+    
+    present_font = Font(name="Inter", size=10, color="065F46")
+    absent_font = Font(name="Inter", size=10, color="991B1B")
+    default_font = Font(name="Inter", size=10, color="1F2937")
+    
+    # Populate student rows
+    row_num = 2
+    for s in students:
+        sid = str(s["_id"])
+        row_data = [
+            s.get("register_number"),
+            s.get("name"),
+            s.get("course"),
+            s.get("balance", 0)
+        ]
+        
+        # Append status for each date
+        for d in sorted_dates:
+            status = att_map.get((sid, d), "Not Marked")
+            row_data.append(status)
+            
+        ws.append(row_data)
+        
+        # Style cells in the row
+        ws.cell(row=row_num, column=1).font = Font(name="Inter", size=10, bold=True)
+        ws.cell(row=row_num, column=2).font = default_font
+        ws.cell(row=row_num, column=3).font = default_font
+        
+        # Style Balance cell
+        bal_cell = ws.cell(row=row_num, column=4)
+        bal_val = row_data[3]
+        bal_cell.font = Font(name="Inter", size=10, bold=True, color="991B1B" if bal_val > 0 else "065F46")
+        
+        # Style daily status cells
+        for col_idx, d in enumerate(sorted_dates, start=5):
+            cell = ws.cell(row=row_num, column=col_idx)
+            status = cell.value
+            if status == "Present":
+                cell.fill = present_fill
+                cell.font = present_font
+            elif status == "Absent":
+                cell.fill = absent_fill
+                cell.font = absent_font
+            else:
+                cell.fill = not_marked_fill
+                cell.font = default_font
+                
+        row_num += 1
+        
+    # Auto-adjust column widths
     ws.column_dimensions['A'].width = 20
     ws.column_dimensions['B'].width = 25
     ws.column_dimensions['C'].width = 15
-    ws.column_dimensions['D'].width = 15
+    ws.column_dimensions['D'].width = 22
+    
+    for col_idx in range(5, len(headers) + 1):
+        col_letter = openpyxl.utils.get_column_letter(col_idx)
+        ws.column_dimensions[col_letter].width = 15
+        
+    ws.views.sheetView[0].showGridLines = True
+    
     output = io.BytesIO()
     wb.save(output)
     output.seek(0)
-    filename = f"Attendance_{target_date}.xlsx"
+    
+    filename = f"Master_Attendance_Report_{date.today().isoformat()}.xlsx"
     return send_file(output, as_attachment=True, download_name=filename,
                      mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
@@ -419,6 +491,75 @@ def clear_db():
     else:
         flash("Incorrect passwords or confirmation not provided. Action aborted.", "danger")
     return redirect(url_for("admin_dashboard"))
+
+@app.route("/admin/manage_money/<string:student_id>", methods=["GET", "POST"])
+@admin_required
+def manage_money(student_id):
+    student = students_collection.find_one({"_id": ObjectId(student_id)})
+    if not student:
+        flash("Student not found.", "danger")
+        return redirect(url_for("admin_dashboard"))
+
+    if request.method == "POST":
+        action = request.form.get("action")
+        prev_balance = float(student.get("balance", 0))
+
+        if action == "direct_update":
+            try:
+                new_balance = float(request.form.get("new_balance", 0))
+                note = request.form.get("note", "Manual balance adjustment").strip() or "Manual balance adjustment"
+                change = new_balance - prev_balance
+                
+                transaction = {
+                    "date": datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+                    "type": "Direct Adjustment",
+                    "amount": change,
+                    "prev_balance": prev_balance,
+                    "new_balance": new_balance,
+                    "note": note
+                }
+                
+                students_collection.update_one(
+                    {"_id": ObjectId(student_id)},
+                    {
+                        "$set": {"balance": new_balance},
+                        "$push": {"payment_history": transaction}
+                    }
+                )
+                flash(f"Balance directly updated to {new_balance}.", "success")
+            except Exception as e:
+                flash(f"Error updating balance: {e}", "danger")
+
+        elif action == "record_payment":
+            try:
+                amount_given = float(request.form.get("amount_given", 0))
+                payment_note = request.form.get("payment_note", "Fees payment").strip() or "Fees payment"
+                new_balance = prev_balance - amount_given
+                
+                transaction = {
+                    "date": datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+                    "type": "Payment Received",
+                    "amount": amount_given,
+                    "prev_balance": prev_balance,
+                    "new_balance": new_balance,
+                    "note": payment_note
+                }
+                
+                students_collection.update_one(
+                    {"_id": ObjectId(student_id)},
+                    {
+                        "$set": {"balance": new_balance},
+                        "$push": {"payment_history": transaction}
+                    }
+                )
+                flash(f"Recorded payment of {amount_given}. Outstanding balance is now {new_balance}.", "success")
+            except Exception as e:
+                flash(f"Error recording payment: {e}", "danger")
+
+        # Refetch student
+        student = students_collection.find_one({"_id": ObjectId(student_id)})
+
+    return render_template("admin_manage_money.html", student=student)
 
 # ─────────────────────────────────────────
 # Entry Point
