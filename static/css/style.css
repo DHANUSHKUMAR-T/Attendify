@@ -939,3 +939,43 @@ a:hover {
     border-color: rgba(79, 70, 229, 0.15);
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
 }
+
+/* ── Mobile Layout Fixes & Premium Glowing Text ── */
+@media (max-width: 768px) {
+    .main-content {
+        padding: 1rem 12px;
+    }
+    .navbar {
+        margin: 1rem 12px;
+        padding: 1rem;
+    }
+    .footer {
+        margin: 1rem 12px;
+    }
+    .dashboard-container {
+        padding: 0;
+        width: 100%;
+    }
+    .dashboard-content > * {
+        grid-column: span 1 !important;
+    }
+    .dashboard-header {
+        padding: 1.5rem 1rem;
+    }
+}
+
+.footer-glow-link {
+    font-weight: 800;
+    color: var(--primary) !important;
+    text-shadow: 0 0 8px rgba(79, 70, 229, 0.4);
+    transition: var(--transition);
+    display: inline-block;
+    position: relative;
+    text-decoration: none;
+}
+
+.footer-glow-link:hover {
+    color: var(--secondary) !important;
+    text-shadow: 0 0 15px rgba(236, 72, 153, 0.8), 0 0 25px rgba(236, 72, 153, 0.5);
+    transform: scale(1.05);
+}

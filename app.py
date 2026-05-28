@@ -561,6 +561,44 @@ def manage_money(student_id):
 
     return render_template("admin_manage_money.html", student=student)
 
+@app.route("/admin/edit_student/<string:student_id>", methods=["GET", "POST"])
+@admin_required
+def edit_student(student_id):
+    student = students_collection.find_one({"_id": ObjectId(student_id)})
+    if not student:
+        flash("Student not found.", "danger")
+        return redirect(url_for("admin_dashboard"))
+    
+    if request.method == "POST":
+        reg_no = request.form.get("register_number", "").strip().upper()
+        name = request.form.get("name", "").strip()
+        course = request.form.get("course", "").strip().upper()
+        mobile = request.form.get("mobile", "").strip()
+        new_password = request.form.get("password", "").strip()
+        
+        if not reg_no or not name or not course:
+            flash("Register number, name, and course are required.", "danger")
+            return render_template("admin_edit_student.html", student=student)
+        
+        update_data = {
+            "register_number": reg_no,
+            "name": name,
+            "course": course,
+            "mobile": mobile
+        }
+        
+        if new_password:
+            update_data["password"] = generate_password_hash(new_password)
+            
+        try:
+            students_collection.update_one({"_id": ObjectId(student_id)}, {"$set": update_data})
+            flash(f"Student profile for {name} updated successfully.", "success")
+            return redirect(url_for("admin_dashboard"))
+        except Exception as e:
+            flash("Error: Register number already exists or database error occurred.", "danger")
+            
+    return render_template("admin_edit_student.html", student=student)
+
 # ─────────────────────────────────────────
 # Entry Point
 # ─────────────────────────────────────────
