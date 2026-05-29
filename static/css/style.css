@@ -200,9 +200,6 @@ a:hover {
 /* ── Layout ── */
 .main-content {
     flex: 1;
-    display: flex;
-    justify-content: center;
-    align-items: center;
     padding: 2rem 5%;
     width: 100%;
     max-width: 1200px;
@@ -239,6 +236,7 @@ a:hover {
     width: 100%;
     max-width: 450px;
     padding: 2.5rem;
+    margin: 1.5rem auto;
 }
 
 .register-container {
