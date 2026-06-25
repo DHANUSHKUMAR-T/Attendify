@@ -11,3 +11,6 @@ ENV/
 .vscode/
 .idea/
 h
+teachers.json
+.env
+service_account.json

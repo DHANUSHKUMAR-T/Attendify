@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Dashboard - Attendify{% endblock %}
+{% block title %}Dashboard - Attendify(CSC){% endblock %}
 
 {% block content %}
 <div class="dashboard-container fade-in-up">
@@ -70,47 +70,89 @@
                 </div>
             </div>
         </div>
+        
+        <div class="stat-card glass-effect">
+            <div class="stat-icon {% if student.balance|default(0) > 0 %}icon-red{% else %}icon-green{% endif %}">
+                <i class="fa-solid fa-wallet"></i>
+            </div>
+            <div class="stat-content">
+                <h3>Fee Balance</h3>
+                <p class="stat-value">₹{{ student.balance|default(0) }}</p>
+                <div class="status-indicator" style="margin-top: 0.5rem;">
+                    {% if student.balance|default(0) > 0 %}
+                        <span style="font-size: 0.85rem; font-weight: 600; color: var(--danger);"><i class="fa-solid fa-circle-exclamation"></i> Payment Pending</span>
+                    {% else %}
+                        <span style="font-size: 0.85rem; font-weight: 600; color: var(--success);"><i class="fa-solid fa-circle-check"></i> Fully Paid</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- Main Content Area -->
     <div class="dashboard-content">
-        <!-- Mark Attendance Section -->
-        <div class="action-section glass-effect">
-            <div class="section-header">
-                <h3><i class="fa-solid fa-clipboard-user"></i> Today's Attendance</h3>
+        <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+            <!-- Mark Attendance Section -->
+            <div class="action-section glass-effect" style="margin-bottom: 0;">
+                <div class="section-header">
+                    <h3><i class="fa-solid fa-clipboard-user"></i> Today's Attendance</h3>
+                </div>
+                
+                <div class="action-body">
+                    {% if already_marked %}
+                        <div class="attendance-status marked">
+                            <div class="status-icon {% if already_marked['status'] == 'Present' %}icon-green{% else %}icon-red{% endif %}">
+                                <i class="fa-solid {% if already_marked['status'] == 'Present' %}fa-check{% else %}fa-xmark{% endif %}"></i>
+                            </div>
+                            <div class="status-text">
+                                <h4>Attendance Recorded</h4>
+                                <p>You have been marked as <strong>{{ already_marked['status'] }}</strong> for today.</p>
+                            </div>
+                        </div>
+                    {% else %}
+                        <div class="attendance-action">
+                            <p class="action-desc">Please mark your attendance for today.</p>
+                            <form method="POST" action="{{ url_for('mark_attendance') }}" class="attendance-form" style="flex-direction: column; max-width: 300px; margin: 0 auto;">
+                                <div class="form-group" style="width: 100%; text-align: left;">
+                                    <label for="otp_pin" style="font-weight: 600;"><i class="fa-solid fa-key"></i> Enter OTP PIN:</label>
+                                    <input type="text" id="otp_pin" name="otp_pin" class="form-control" placeholder="4-digit PIN" maxlength="4" required style="padding-left: 1rem; text-align: center; letter-spacing: 5px; font-size: 1.2rem; font-weight: 700;">
+                                    <small style="color: var(--text-muted); display: block; margin-top: 0.5rem;">Ask your teacher for the current PIN.</small>
+                                </div>
+                                <div style="display: flex; gap: 1rem; width: 100%;">
+                                    <button type="submit" name="status" value="Present" class="btn btn-success btn-lg" style="flex: 1;">
+                                        <i class="fa-solid fa-hand-sparkles"></i> Mark Present
+                                    </button>
+                                    <button type="submit" name="status" value="Absent" class="btn btn-danger btn-lg" style="flex: 1;">
+                                        <i class="fa-solid fa-bed"></i> Mark Absent
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    {% endif %}
+                </div>
             </div>
-            
-            <div class="action-body">
-                {% if already_marked %}
-                    <div class="attendance-status marked">
-                        <div class="status-icon {% if already_marked['status'] == 'Present' %}icon-green{% else %}icon-red{% endif %}">
-                            <i class="fa-solid {% if already_marked['status'] == 'Present' %}fa-check{% else %}fa-xmark{% endif %}"></i>
-                        </div>
-                        <div class="status-text">
-                            <h4>Attendance Recorded</h4>
-                            <p>You have been marked as <strong>{{ already_marked['status'] }}</strong> for today.</p>
-                        </div>
-                    </div>
-                {% else %}
-                    <div class="attendance-action">
-                        <p class="action-desc">Please mark your attendance for today.</p>
-                        <form method="POST" action="{{ url_for('mark_attendance') }}" class="attendance-form" style="flex-direction: column; max-width: 300px; margin: 0 auto;">
-                            <div class="form-group" style="width: 100%; text-align: left;">
-                                <label for="otp_pin" style="font-weight: 600;"><i class="fa-solid fa-key"></i> Enter OTP PIN:</label>
-                                <input type="text" id="otp_pin" name="otp_pin" class="form-control" placeholder="4-digit PIN" maxlength="4" required style="padding-left: 1rem; text-align: center; letter-spacing: 5px; font-size: 1.2rem; font-weight: 700;">
-                                <small style="color: var(--text-muted); display: block; margin-top: 0.5rem;">Ask your teacher for the current PIN.</small>
+
+            <!-- Assigned Teacher Section -->
+            <div class="action-section glass-effect" style="margin-bottom: 0;">
+                <div class="section-header">
+                    <h3><i class="fa-solid fa-chalkboard-user"></i> Assigned Teacher</h3>
+                </div>
+                <div class="action-body" style="padding: 0.5rem 1rem; display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start; min-height: auto;">
+                    <form method="POST" action="{{ url_for('update_student_teacher') }}" style="width: 100%;">
+                        <div class="form-group" style="margin-bottom: 0; text-align: left; display: flex; flex-direction: column; gap: 0.6rem; width: 100%;">
+                            <label for="teacher_username" style="font-weight: 600;">Current Teacher: <strong style="color: var(--primary);">{{ current_teacher_name }}</strong></label>
+                            <div class="input-icon-wrapper">
+                                <i class="fa-solid fa-chalkboard-user input-icon"></i>
+                                <select id="teacher_username" name="teacher_username" class="form-control" onchange="this.form.submit()" style="background-color: white;">
+                                    {% for u, t in teachers.items() %}
+                                        <option value="{{ u }}" {% if student.teacher_username == u or (not student.teacher_username and u == 'admin') %}selected{% endif %}>{{ t.name }}</option>
+                                    {% endfor %}
+                                </select>
                             </div>
-                            <div style="display: flex; gap: 1rem; width: 100%;">
-                                <button type="submit" name="status" value="Present" class="btn btn-success btn-lg" style="flex: 1;">
-                                    <i class="fa-solid fa-hand-sparkles"></i> Mark Present
-                                </button>
-                                <button type="submit" name="status" value="Absent" class="btn btn-danger btn-lg" style="flex: 1;">
-                                    <i class="fa-solid fa-bed"></i> Mark Absent
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                {% endif %}
+                            <small style="color: var(--text-muted); display: block; margin-top: 0.2rem;">Changing your teacher updates your attendance records' visibility immediately.</small>
+                        </div>
+                    </form>
+                </div>
             </div>
         </div>
 
@@ -148,6 +190,52 @@
                             <i class="fa-regular fa-folder-open"></i>
                         </div>
                         <p>No attendance records found yet.</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Fee Payment History Section -->
+        <div class="history-section glass-effect" style="margin-top: 1.5rem; grid-column: span 2;">
+            <div class="section-header">
+                <h3><i class="fa-solid fa-file-invoice-dollar"></i> Fee Payment & Transaction History</h3>
+            </div>
+            <div class="table-responsive">
+                {% if student.payment_history %}
+                    <table class="history-table">
+                        <thead>
+                            <tr>
+                                <th>Date & Time</th>
+                                <th>Type</th>
+                                <th>Amount Change</th>
+                                <th>Remaining Balance</th>
+                                <th>Note</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for record in student.payment_history|reverse %}
+                            <tr>
+                                <td>{{ record.date }}</td>
+                                <td>
+                                    <span class="status-badge" style="background: {% if record.type == 'Payment Received' %}rgba(16, 185, 129, 0.15); color: var(--success);{% else %}rgba(79, 70, 229, 0.15); color: var(--primary);{% endif %} border: none; padding: 0.2rem 0.5rem; border-radius: 6px; font-size: 0.8rem; font-weight: 600; display: inline-block;">
+                                        {{ record.type }}
+                                    </span>
+                                </td>
+                                <td style="font-weight: 600; color: {% if record.type == 'Payment Received' %}var(--success){% else %}var(--primary){% endif %};">
+                                    {% if record.type == 'Payment Received' %}-{% else %}+{% endif %}₹{{ record.amount|abs }}
+                                </td>
+                                <td style="font-weight: bold; color: {% if record.new_balance > 0 %}var(--danger){% else %}var(--success){% endif %};">₹{{ record.new_balance }}</td>
+                                <td><span style="color: var(--text-muted); font-size: 0.9rem;">{{ record.note }}</span></td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                {% else %}
+                    <div class="empty-state">
+                        <div class="empty-icon" style="font-size: 2.5rem; color: var(--text-muted); margin-bottom: 0.5rem;">
+                            <i class="fa-solid fa-receipt"></i>
+                        </div>
+                        <p style="color: var(--text-muted); margin: 0;">No fee payment records found.</p>
                     </div>
                 {% endif %}
             </div>

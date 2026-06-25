@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Admin Dashboard - Attendify{% endblock %}
+{% block title %}Admin Dashboard - Attendify(CSC){% endblock %}
 
 {% block content %}
 <div class="dashboard-container fade-in-up" style="max-width: 1000px; margin: 0 auto;">
@@ -14,7 +14,9 @@
             <div class="student-details">
                 <h2>Admin Dashboard</h2>
                 <div class="badges">
-                    <span class="badge badge-primary">Super Admin</span>
+                    <span class="badge {% if session.get('admin_role') == 'Super Admin' %}badge-primary{% else %}badge-secondary{% endif %}">
+                        {{ session.get('admin_role', 'Super Admin') }}
+                    </span>
                 </div>
             </div>
         </div>
@@ -170,6 +172,7 @@
                         <th>Reg No</th>
                         <th>Name</th>
                         <th>Course</th>
+                        <th>Fee Balance</th>
                         <th>Status</th>
                         <th>Action</th>
                     </tr>
@@ -181,6 +184,11 @@
                         <td>{{ student.name }}</td>
                         <td>{{ student.course }}</td>
                         <td>
+                            <span style="font-weight: 700; color: {% if student.balance|default(0) > 0 %}var(--danger){% else %}var(--success){% endif %};">
+                                ₹{{ student.balance|default(0) }}
+                            </span>
+                        </td>
+                        <td>
                             {% if student.status == 'Present' %}
                                 <span class="status-badge status-present">Present</span>
                             {% elif student.status == 'Absent' %}
@@ -189,7 +197,7 @@
                                 <span class="status-badge" style="background: var(--light); color: var(--text-muted);">Not Marked</span>
                             {% endif %}
                         </td>
-                        <td style="display: flex; gap: 0.5rem;">
+                        <td style="display: flex; gap: 0.5rem; align-items: center;">
                             <form method="POST" action="{{ url_for('update_attendance') }}" style="display: flex; gap: 0.5rem;">
                                 <input type="hidden" name="student_id" value="{{ student.id }}">
                                 <input type="hidden" name="date" value="{{ target_date }}">
@@ -200,8 +208,14 @@
                                     <option value="Absent" {% if student.status == 'Absent' %}disabled{% endif %}>Mark Absent</option>
                                 </select>
                             </form>
-                            <form method="POST" action="{{ url_for('admin_delete_student', student_id=student.id) }}" style="display: inline;" onsubmit="return confirm('Delete student {{ student.name }}? All their attendance records will be lost.')">
-                                <button type="submit" class="btn btn-danger" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;">
+                            <a href="{{ url_for('manage_money', student_id=student.id) }}" class="btn" style="background: var(--success); color: white; padding: 0.3rem 0.6rem; font-size: 0.8rem; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; height: 31px; width: 31px;" title="Manage Money">
+                                <i class="fa-solid fa-wallet"></i>
+                            </a>
+                            <a href="{{ url_for('edit_student', student_id=student.id) }}" class="btn" style="background: var(--info); color: white; padding: 0.3rem 0.6rem; font-size: 0.8rem; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; height: 31px; width: 31px;" title="Edit Student Profile">
+                                <i class="fa-solid fa-user-pen"></i>
+                            </a>
+                            <form method="POST" action="{{ url_for('admin_delete_student', student_id=student.id) }}" style="display: inline; margin-bottom: 0;" onsubmit="return confirm('Delete student {{ student.name }}? All their attendance records will be lost.')">
+                                <button type="submit" class="btn btn-danger" style="padding: 0.3rem 0.6rem; font-size: 0.8rem; height: 31px; width: 31px; display: inline-flex; align-items: center; justify-content: center;">
                                     <i class="fa-solid fa-trash-can"></i>
                                 </button>
                             </form>
@@ -217,7 +231,97 @@
             {% endif %}
         </div>
 
-    <!-- Danger Zone: Clear Database -->
+    </div>
+
+    <!-- Teacher Management Section (Visible to Super Admin only) -->
+    {% if session.get('admin_role') == 'Super Admin' %}
+    <div class="history-section glass-effect" style="margin-top: 2rem;">
+        <div class="section-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+            <h3><i class="fa-solid fa-chalkboard-user"></i> Teacher & Admin Management</h3>
+            <button class="btn btn-primary" onclick="document.getElementById('add-teacher-section').style.display='block'" style="padding: 0.5rem 1rem;">
+                <i class="fa-solid fa-user-plus"></i> Add Teacher/Admin
+            </button>
+        </div>
+
+        <!-- Add Teacher Section (Hidden by default) -->
+        <div id="add-teacher-section" class="glass-effect fade-in-up" style="display: none; margin-bottom: 1.5rem; padding: 1.5rem; border: 1px solid rgba(79, 70, 229, 0.2);">
+            <div class="section-header" style="display: flex; justify-content: space-between; align-items: center; border-bottom: none; margin-bottom: 0.5rem; padding-bottom: 0;">
+                <h4><i class="fa-solid fa-user-plus"></i> Add New Teacher/Admin</h4>
+                <button class="btn-logout" onclick="document.getElementById('add-teacher-section').style.display='none'" style="background: none; border: none; color: var(--danger); cursor: pointer; font-size: 1.2rem;">
+                    <i class="fa-solid fa-circle-xmark"></i>
+                </button>
+            </div>
+            <form method="POST" action="{{ url_for('admin_add_teacher') }}" class="auth-form" style="margin-top: 1rem;">
+                <div class="form-row">
+                    <div class="form-group half-width">
+                        <label>Username</label>
+                        <input type="text" name="teacher_username" class="form-control" required style="padding-left: 1rem;" placeholder="e.g. teacher_smith">
+                    </div>
+                    <div class="form-group half-width">
+                        <label>Full Name</label>
+                        <input type="text" name="teacher_name" class="form-control" required style="padding-left: 1rem;" placeholder="e.g. Mr. Smith">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group half-width">
+                        <label>Password</label>
+                        <input type="password" name="teacher_password" class="form-control" required style="padding-left: 1rem;" placeholder="Min 6 characters">
+                    </div>
+                    <div class="form-group half-width">
+                        <label>Role</label>
+                        <select name="teacher_role" class="form-control" required style="padding-left: 1rem;">
+                            <option value="Teacher" selected>Teacher</option>
+                            <option value="Super Admin">Super Admin</option>
+                        </select>
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary">Create Account</button>
+            </form>
+        </div>
+
+        <div class="table-responsive" style="max-height: 400px;">
+            <table class="history-table">
+                <thead>
+                    <tr>
+                        <th>Username</th>
+                        <th>Name</th>
+                        <th>Role</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for username, info in teachers.items() %}
+                    <tr>
+                        <td><strong>{{ username }}</strong></td>
+                        <td>{{ info.name }}</td>
+                        <td>
+                            <span class="badge {% if info.role == 'Super Admin' %}badge-primary{% else %}badge-secondary{% endif %}">
+                                {{ info.role }}
+                            </span>
+                        </td>
+                        <td>
+                            {% if username == session.get('admin_username') %}
+                                <span class="text-muted" style="font-size: 0.85rem; font-style: italic;">You (Current User)</span>
+                            {% elif username == 'admin' %}
+                                <span class="text-muted" style="font-size: 0.85rem; font-style: italic;">Default Account</span>
+                            {% else %}
+                                <form method="POST" action="{{ url_for('admin_delete_teacher', username=username) }}" style="display: inline;" onsubmit="return confirm('Delete teacher account for {{ info.name }}?')">
+                                    <button type="submit" class="btn btn-danger" style="padding: 0.3rem 0.6rem; font-size: 0.8rem; height: 31px; width: 31px; display: inline-flex; align-items: center; justify-content: center;">
+                                        <i class="fa-solid fa-trash-can"></i>
+                                    </button>
+                                </form>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Danger Zone: Clear Database (Super Admin only) -->
+    {% if session.get('admin_role') == 'Super Admin' %}
     <div class="danger-section glass-effect fade-in-up" style="margin-top: 2rem; border-color: rgba(239, 68, 68, 0.3);">
         <div class="section-header" style="border-bottom-color: rgba(239, 68, 68, 0.2);">
             <h3 style="color: var(--danger);"><i class="fa-solid fa-triangle-exclamation"></i> Danger Zone</h3>
@@ -259,5 +363,6 @@
             </form>
         </div>
     </div>
+    {% endif %}
 </div>
 {% endblock %}

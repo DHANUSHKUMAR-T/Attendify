@@ -24,11 +24,11 @@
     <nav class="navbar glass-effect">
         <div class="nav-brand">
             <i class="fa-solid fa-graduation-cap"></i>
-            <span>Attendify</span>
+            <span>Attendify(CSC)</span>
         </div>
         <div class="nav-links">
             {% if session.get('is_admin') %}
-                <span class="user-greeting">Hi, Admin</span>
+                <span class="user-greeting">Hi, {{ session.get('admin_name', 'Admin') }}</span>
                 <a href="{{ url_for('admin_dashboard') }}" class="nav-link"><i class="fa-solid fa-chart-line"></i> Admin Dashboard</a>
                 <a href="{{ url_for('admin_logout') }}" class="nav-link btn-logout"><i class="fa-solid fa-right-from-bracket"></i> Logout</a>
             {% elif session.get('student_id') %}
@@ -75,9 +75,8 @@
         {% block content %}{% endblock %}
     </main>
 
-    <!-- Footer -->
     <footer class="footer glass-effect">
-        <p>&copy; {{ today[:4] if today else '2024' }} Attendify. Student Attendance Management System By DHANUSHKUMAR T</p>
+        <p>&copy; 2026 Attendify(CSC). Student Attendance Management System By <a href="https://tdhanushkumar-dhanushkuma-t-portfolio.static.hf.space/index.html" target="_blank" class="footer-glow-link">DHANUSHKUMAR T</a></p>
     </footer>
 
     <script>

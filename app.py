@@ -1,13 +1,12 @@
 """
 Student Attendance Management System
 =====================================
-Flask application with SQLite database
+Flask application with MongoDB backend
 Handles registration, login, and attendance tracking
 """
 
 from flask import Flask, render_template, request, redirect, url_for, session, flash, send_file
 from werkzeug.security import generate_password_hash, check_password_hash
-import sqlite3
 import os
 import io
 import random
@@ -17,6 +16,8 @@ from datetime import date, datetime
 from functools import wraps
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
+from pymongo import MongoClient
+from bson import ObjectId
 
 # ─────────────────────────────────────────
 # App Configuration
@@ -24,7 +25,18 @@ from oauth2client.service_account import ServiceAccountCredentials
 app = Flask(__name__)
 app.secret_key = "sams_secret_key_2024"   # Change this in production!
 
-DB_PATH = os.path.join(os.path.dirname(__file__), "attendance.db")
+# MongoDB connection – use environment variable MONGO_URI
+MONGO_URI="mongodb+srv://tdhanu:Dhanu123@clustersumma.ggzzczb.mongodb.net/attendance_db?retryWrites=true&w=majority&appName=ClusterSumma"
+client = MongoClient(MONGO_URI)
+db = client["attendance_db"]
+students_collection = db["students"]
+attendance_collection = db["attendance"]
+teachers_collection = db["teachers"]
+
+# Ensure unique index on register_number
+students_collection.create_index("register_number", unique=True)
+# Ensure unique index on username for teachers
+teachers_collection.create_index("username", unique=True)
 
 # Strict Attendance Settings
 ADMIN_PASSWORD = "admin123"
@@ -33,26 +45,73 @@ ADMIN_CLEAR_SECRET = "CLEAR2024"
 # Global PIN for attendance marking
 CURRENT_PIN = None
 
+import json
+
+def load_teachers():
+    """Load teachers from MongoDB. Returns dict keyed by username."""
+    try:
+        docs = list(teachers_collection.find({}, {"_id": 0}))
+        return {doc["username"]: doc for doc in docs}
+    except Exception as e:
+        print(f"Error loading teachers from MongoDB: {e}")
+        return {}
+
+def save_teacher(teacher_doc):
+    """Upsert a single teacher document into MongoDB."""
+    try:
+        teachers_collection.update_one(
+            {"username": teacher_doc["username"]},
+            {"$set": teacher_doc},
+            upsert=True
+        )
+        return True
+    except Exception as e:
+        print(f"Error saving teacher to MongoDB: {e}")
+        return False
+
+def delete_teacher(username):
+    """Delete a teacher by username from MongoDB."""
+    try:
+        teachers_collection.delete_one({"username": username})
+        return True
+    except Exception as e:
+        print(f"Error deleting teacher from MongoDB: {e}")
+        return False
+
+def init_teachers():
+    """Initialize MongoDB teachers with a default Super Admin if not present."""
+    existing = teachers_collection.find_one({"username": "admin"})
+    if not existing:
+        save_teacher({
+            "username": "admin",
+            "name": "Dhanu",
+            "password": generate_password_hash(ADMIN_PASSWORD),
+            "role": "Super Admin"
+        })
+    elif existing.get("name") == "Super Admin":
+        teachers_collection.update_one(
+            {"username": "admin"},
+            {"$set": {"name": "Dhanu"}}
+        )
+
+init_teachers()
+
 # Google Sheets Configuration
 SHEET_URL = "https://docs.google.com/spreadsheets/d/1Thkg9MvtngFwsOD6PadpgJe7C7RbVYz2dfUW_3CgyCc/edit"
 CREDENTIALS_FILE = os.path.join(os.path.dirname(__file__), "service_account.json")
 
 def sync_to_google_sheets(data):
-    """
-    Sync attendance data to Google Sheets.
+    """Sync attendance data to Google Sheets.
     data: dict with date, time, reg_no, name, course, status
     """
     if not os.path.exists(CREDENTIALS_FILE):
         print("Google Sheets Sync: service_account.json not found. Skipping sync.")
         return False
-    
     try:
         scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
         creds = ServiceAccountCredentials.from_json_keyfile_name(CREDENTIALS_FILE, scope)
-        client = gspread.authorize(creds)
-        sheet = client.open_by_url(SHEET_URL).sheet1
-        
-        # Append row: Date, Time, Reg No, Name, Course, Status
+        client_gs = gspread.authorize(creds)
+        sheet = client_gs.open_by_url(SHEET_URL).sheet1
         sheet.append_row([
             data.get('date'),
             data.get('time'),
@@ -66,50 +125,10 @@ def sync_to_google_sheets(data):
         print(f"Google Sheets Sync Error: {e}")
         return False
 
-
-# ─────────────────────────────────────────
-# Database Helper
-# ─────────────────────────────────────────
-def get_db():
-    """Return a database connection with row_factory for dict-like rows."""
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA foreign_keys = ON")   # enforce foreign key constraints
-    return conn
-
-
-def init_db():
-    """Create tables if they do not already exist."""
-    with get_db() as conn:
-        conn.executescript("""
-            -- Students table: stores registration details
-            CREATE TABLE IF NOT EXISTS students (
-                id              INTEGER PRIMARY KEY AUTOINCREMENT,
-                register_number TEXT    NOT NULL UNIQUE,
-                name            TEXT    NOT NULL,
-                course          TEXT    NOT NULL,
-                mobile          TEXT    NOT NULL,
-                alt_mobile      TEXT,
-                password        TEXT    NOT NULL
-            );
-
-            -- Attendance table: one record per student per day
-            CREATE TABLE IF NOT EXISTS attendance (
-                id         INTEGER PRIMARY KEY AUTOINCREMENT,
-                student_id INTEGER NOT NULL,
-                date       TEXT    NOT NULL,
-                status     TEXT    NOT NULL CHECK(status IN ('Present', 'Absent')),
-                FOREIGN KEY (student_id) REFERENCES students(id),
-                UNIQUE (student_id, date)   -- no duplicate entries for same day
-            );
-        """)
-
-
 # ─────────────────────────────────────────
 # Login Required Decorator
 # ─────────────────────────────────────────
 def login_required(f):
-    """Redirect to login page if the user is not logged in."""
     @wraps(f)
     def decorated(*args, **kwargs):
         if "student_id" not in session:
@@ -119,7 +138,6 @@ def login_required(f):
     return decorated
 
 def admin_required(f):
-    """Redirect to admin login if not admin."""
     @wraps(f)
     def decorated(*args, **kwargs):
         if not session.get("is_admin"):
@@ -128,6 +146,14 @@ def admin_required(f):
         return f(*args, **kwargs)
     return decorated
 
+def super_admin_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not session.get("is_admin") or session.get("admin_role") != "Super Admin":
+            flash("Access denied: Super Admin role required.", "danger")
+            return redirect(url_for("admin_dashboard"))
+        return f(*args, **kwargs)
+    return decorated
 
 # ─────────────────────────────────────────
 # Routes
@@ -135,23 +161,22 @@ def admin_required(f):
 
 @app.route("/")
 def index():
-    """Landing page – redirect to login."""
     return redirect(url_for("login"))
 
-
 # ── Registration ──────────────────────────
-@app.route("/register", methods=["GET", "POST"])
+@app.route("/register", methods=["GET", "POST"]) 
 def register():
+    teachers = load_teachers()
     if request.method == "POST":
-        reg_no   = request.form.get("register_number", "").strip().upper()
-        name     = request.form.get("name", "").strip()
-        course   = request.form.get("course", "").strip().upper()
-        mobile   = request.form.get("mobile", "").strip()
-        alt_mob  = request.form.get("alt_mobile", "").strip()
+        reg_no = request.form.get("register_number", "").strip().upper()
+        name = request.form.get("name", "").strip()
+        course = request.form.get("course", "").strip().upper()
+        mobile = request.form.get("mobile", "").strip()
+        alt_mob = request.form.get("alt_mobile", "").strip()
         password = request.form.get("password", "")
-        confirm  = request.form.get("confirm_password", "")
+        confirm = request.form.get("confirm_password", "")
+        teacher_username = request.form.get("teacher_username", "admin").strip().lower()
 
-        # ── Basic validation ─────────────────────
         errors = []
         if not reg_no:
             errors.append("Register number is required.")
@@ -159,7 +184,7 @@ def register():
             errors.append("Name is required.")
         if not course:
             errors.append("Course is required.")
-        if not mobile or not mobile.isdigit() or len(mobile) != 10:
+        if not mobile.isdigit() or len(mobile) != 10:
             errors.append("Enter a valid 10-digit mobile number.")
         if alt_mob and (not alt_mob.isdigit() or len(alt_mob) != 10):
             errors.append("Alternative mobile must be a valid 10-digit number.")
@@ -167,59 +192,50 @@ def register():
             errors.append("Password must be at least 6 characters.")
         if password != confirm:
             errors.append("Passwords do not match.")
-
+        if teacher_username not in teachers:
+            errors.append("Selected teacher is invalid.")
         if errors:
             for e in errors:
                 flash(e, "danger")
-            return render_template("register.html",
-                                   form=request.form)
+            return render_template("register.html", form=request.form, teachers=teachers)
 
-        # ── Save to database ─────────────────────
         hashed_pw = generate_password_hash(password)
         try:
-            with get_db() as conn:
-                conn.execute(
-                    """INSERT INTO students
-                       (register_number, name, course, mobile, alt_mobile, password)
-                       VALUES (?, ?, ?, ?, ?, ?)""",
-                    (reg_no, name, course, mobile, alt_mob or None, hashed_pw)
-                )
+            students_collection.insert_one({
+                "register_number": reg_no,
+                "name": name,
+                "course": course,
+                "mobile": mobile,
+                "alt_mobile": alt_mob or None,
+                "password": hashed_pw,
+                "teacher_username": teacher_username
+            })
             flash("Registration successful! Please log in.", "success")
             return redirect(url_for("login"))
-        except sqlite3.IntegrityError:
-            flash("Register number already exists. Please use a different one.", "danger")
-            return render_template("register.html", form=request.form)
-
-    return render_template("register.html", form={})
-
+        except Exception as e:
+            flash("Register number already exists or database error.", "danger")
+            return render_template("register.html", form=request.form, teachers=teachers)
+    return render_template("register.html", form={}, teachers=teachers)
 
 # ── Login ─────────────────────────────────
-@app.route("/login", methods=["GET", "POST"])
+@app.route("/login", methods=["GET", "POST"]) 
 def login():
     if "student_id" in session:
         return redirect(url_for("dashboard"))
-
     if request.method == "POST":
-        reg_no   = request.form.get("register_number", "").strip().upper()
+        reg_no = request.form.get("register_number", "").strip().upper()
         password = request.form.get("password", "")
-
-        with get_db() as conn:
-            student = conn.execute(
-                "SELECT * FROM students WHERE register_number = ?", (reg_no,)
-            ).fetchone()
-
+        student = students_collection.find_one({"register_number": reg_no})
         if student and check_password_hash(student["password"], password):
-            session["student_id"]       = student["id"]
-            session["student_name"]     = student["name"]
-            session["register_number"]  = student["register_number"]
-            session["course"]           = student["course"]
+            session["student_id"] = str(student["_id"])
+            session["student_name"] = student["name"]
+            session["register_number"] = student["register_number"]
+            session["course"] = student["course"]
             flash(f"Welcome back, {student['name']}!", "success")
             return redirect(url_for("dashboard"))
         else:
             flash("Invalid register number or password.", "danger")
-
     return render_template("login.html")
-
 
 # ── Logout ────────────────────────────────
 @app.route("/logout")
@@ -229,47 +245,44 @@ def logout():
     flash("Logged out successfully.", "info")
     return redirect(url_for("login"))
 
-
 # ── Dashboard ─────────────────────────────
 @app.route("/dashboard")
 @login_required
 def dashboard():
-    student_id  = session["student_id"]
-    today       = date.today().isoformat()
+    student_id = session["student_id"]
+    today = date.today().isoformat()
 
-    with get_db() as conn:
-        # Check if attendance already marked for today
-        already_marked = conn.execute(
-            "SELECT status FROM attendance WHERE student_id = ? AND date = ?",
-            (student_id, today)
-        ).fetchone()
+    # Attendance for today
+    already_marked_doc = attendance_collection.find_one({"student_id": ObjectId(student_id), "date": today})
+    already_marked = already_marked_doc["status"] if already_marked_doc else None
 
-        # Full attendance history (newest first)
-        history = conn.execute(
-            """SELECT date, status
-               FROM attendance
-               WHERE student_id = ?
-               ORDER BY date DESC""",
-            (student_id,)
-        ).fetchall()
+    # Full history (newest first)
+    history_cursor = attendance_collection.find({"student_id": ObjectId(student_id)}).sort("date", -1)
+    history = list(history_cursor)
 
-        # Statistics
-        total     = len(history)
-        present   = sum(1 for r in history if r["status"] == "Present")
-        absent    = total - present
-        pct       = round((present / total * 100), 1) if total > 0 else 0
+    total = len(history)
+    present = sum(1 for r in history if r.get("status") == "Present")
+    absent = total - present
+    pct = round((present / total * 100), 1) if total > 0 else 0
+
+    student = students_collection.find_one({"_id": ObjectId(student_id)})
+    teachers = load_teachers()
+    teacher_username = student.get("teacher_username") or "admin"
+    current_teacher_name = teachers.get(teacher_username, {}).get("name", "Dhanu")
 
     return render_template(
         "dashboard.html",
-        today          = today,
-        already_marked = already_marked,
-        history        = history,
-        total          = total,
-        present        = present,
-        absent         = absent,
-        percentage     = pct
+        today=today,
+        already_marked=already_marked,
+        history=history,
+        total=total,
+        present=present,
+        absent=absent,
+        percentage=pct,
+        student=student,
+        teachers=teachers,
+        current_teacher_name=current_teacher_name
     )
-
 
 # ── Mark Attendance ───────────────────────
 @app.route("/mark_attendance", methods=["POST"])
@@ -277,105 +290,101 @@ def dashboard():
 def mark_attendance():
     global CURRENT_PIN
     student_id = session["student_id"]
-    today      = date.today().isoformat()
-    status     = request.form.get("status")
-    user_pin   = request.form.get("otp_pin")
+    today = date.today().isoformat()
+    status = request.form.get("status")
+    user_pin = request.form.get("otp_pin")
 
-    # 1. Validate PIN if exists
     if CURRENT_PIN and user_pin != str(CURRENT_PIN):
         flash("Invalid OTP PIN. Please check with your teacher.", "danger")
         return redirect(url_for("dashboard"))
-
-    # 2. Validate Status
     if status not in ("Present", "Absent"):
         flash("Invalid status selection.", "danger")
         return redirect(url_for("dashboard"))
 
     try:
-        with get_db() as conn:
-            conn.execute(
-                """INSERT INTO attendance (student_id, date, status)
-                   VALUES (?, ?, ?)""",
-                (student_id, today, status)
-            )
-        
+        attendance_collection.insert_one({
+            "student_id": ObjectId(student_id),
+            "date": today,
+            "status": status
+        })
         # Sync to Google Sheets
-        with get_db() as conn:
-            student = conn.execute("SELECT * FROM students WHERE id = ?", (student_id,)).fetchone()
-            if student:
-                sync_data = {
-                    "date": today,
-                    "time": datetime.now().strftime("%H:%M:%S"),
-                    "reg_no": student["register_number"],
-                    "name": student["name"],
-                    "course": student["course"],
-                    "status": status
-                }
-                sync_to_google_sheets(sync_data)
-
+        student = students_collection.find_one({"_id": ObjectId(student_id)})
+        if student:
+            sync_data = {
+                "date": today,
+                "time": datetime.now().strftime("%H:%M:%S"),
+                "reg_no": student["register_number"],
+                "name": student["name"],
+                "course": student["course"],
+                "status": status
+            }
+            sync_to_google_sheets(sync_data)
         flash(f"Attendance marked as {status} for today ({today}).", "success")
-    except sqlite3.IntegrityError:
-        flash("Attendance for today has already been recorded.", "warning")
-
+    except Exception as e:
+        flash("Attendance for today has already been recorded or an error occurred.", "warning")
     return redirect(url_for("dashboard"))
-
 
 # ── Admin Routes ──────────────────────────
 @app.route("/admin_login", methods=["GET", "POST"])
 def admin_login():
     if session.get("is_admin"):
         return redirect(url_for("admin_dashboard"))
-
     if request.method == "POST":
+        username = request.form.get("username", "admin").strip().lower()
         password = request.form.get("password", "")
-        if password == ADMIN_PASSWORD:
-            session["is_admin"] = True
-            flash("Admin login successful.", "success")
-            return redirect(url_for("admin_dashboard"))
+        
+        teachers = load_teachers()
+        if username in teachers:
+            teacher = teachers[username]
+            if check_password_hash(teacher["password"], password) or (username == "admin" and password == ADMIN_PASSWORD):
+                session["is_admin"] = True
+                session["admin_username"] = username
+                session["admin_name"] = teacher["name"]
+                session["admin_role"] = teacher.get("role", "Super Admin")
+                flash(f"Welcome back, {teacher['name']}!", "success")
+                return redirect(url_for("admin_dashboard"))
+            else:
+                flash("Invalid username or password.", "danger")
         else:
-            flash("Invalid admin password.", "danger")
-
+            flash("Invalid username or password.", "danger")
     return render_template("admin_login.html")
 
 @app.route("/admin_logout")
 def admin_logout():
     session.pop("is_admin", None)
+    session.pop("admin_username", None)
+    session.pop("admin_name", None)
+    session.pop("admin_role", None)
     flash("Admin logged out.", "info")
     return redirect(url_for("admin_login"))
 
 @app.route("/admin_dashboard")
 @admin_required
 def admin_dashboard():
-    # By default show today's attendance for all students
     target_date = request.args.get("date", date.today().isoformat())
     
-    with get_db() as conn:
-        students = conn.execute("SELECT id, register_number, name, course FROM students").fetchall()
+    current_teacher = session.get("admin_username")
+    if current_teacher == "admin":
+        student_query = {"$or": [{"teacher_username": "admin"}, {"teacher_username": {"$exists": False}}]}
+    else:
+        student_query = {"teacher_username": current_teacher}
         
-        # Get attendance for the target date
-        attendance_records = conn.execute(
-            "SELECT student_id, status FROM attendance WHERE date = ?", 
-            (target_date,)
-        ).fetchall()
-        
-        # Build dictionary mapping student_id -> status
-        att_map = {r["student_id"]: r["status"] for r in attendance_records}
-        
-        # Combine data
-        student_data = []
-        for s in students:
-            student_data.append({
-                "id": s["id"],
-                "register_number": s["register_number"],
-                "name": s["name"],
-                "course": s["course"],
-                "status": att_map.get(s["id"], "Not Marked")
-            })
-            
-    return render_template("admin_dashboard.html", 
-                           students=student_data, 
-                           target_date=target_date,
-                           current_pin=CURRENT_PIN)
+    students = list(students_collection.find(student_query, {"register_number": 1, "name": 1, "course": 1, "balance": 1}))
+    attendance_records = list(attendance_collection.find({"date": target_date}, {"student_id": 1, "status": 1}))
+    att_map = {str(rec["student_id"]): rec["status"] for rec in attendance_records}
+    student_data = []
+    for s in students:
+        sid = str(s["_id"])
+        student_data.append({
+            "id": sid,
+            "register_number": s["register_number"],
+            "name": s["name"],
+            "course": s["course"],
+            "balance": s.get("balance", 0),
+            "status": att_map.get(sid, "Not Marked")
+        })
+    teachers = load_teachers()
+    return render_template("admin_dashboard.html", students=student_data, target_date=target_date, current_pin=CURRENT_PIN, teachers=teachers)
 
 @app.route("/admin/update_attendance", methods=["POST"])
 @admin_required
@@ -384,160 +393,428 @@ def update_attendance():
     target_date = request.form.get("date")
     new_status = request.form.get("status")
     
+    student = students_collection.find_one({"_id": ObjectId(student_id)})
+    if not student:
+        flash("Student not found.", "danger")
+        return redirect(url_for("admin_dashboard", date=target_date))
+        
+    current_teacher = session.get("admin_username")
+    student_teacher = student.get("teacher_username") or "admin"
+    if student_teacher != current_teacher and session.get("admin_role") != "Super Admin":
+        flash("Access denied: You do not own this student.", "danger")
+        return redirect(url_for("admin_dashboard", date=target_date))
+        
     if new_status not in ("Present", "Absent"):
         flash("Invalid status.", "danger")
         return redirect(url_for("admin_dashboard", date=target_date))
-        
-    with get_db() as conn:
-        # Check if record exists
-        existing = conn.execute(
-            "SELECT id FROM attendance WHERE student_id = ? AND date = ?", 
-            (student_id, target_date)
-        ).fetchone()
-        
-        if existing:
-            conn.execute(
-                "UPDATE attendance SET status = ? WHERE id = ?", 
-                (new_status, existing["id"])
-            )
-        else:
-            conn.execute(
-                "INSERT INTO attendance (student_id, date, status) VALUES (?, ?, ?)",
-                (student_id, target_date, new_status)
-            )
-    
+    existing = attendance_collection.find_one({"student_id": ObjectId(student_id), "date": target_date})
+    if existing:
+        attendance_collection.update_one({"_id": existing["_id"]}, {"$set": {"status": new_status}})
+    else:
+        attendance_collection.insert_one({"student_id": ObjectId(student_id), "date": target_date, "status": new_status})
     # Sync to Google Sheets
-    with get_db() as conn:
-        student = conn.execute("SELECT * FROM students WHERE id = ?", (student_id,)).fetchone()
-        if student:
-            sync_data = {
-                "date": target_date,
-                "time": datetime.now().strftime("%H:%M:%S"),
-                "reg_no": student["register_number"],
-                "name": student["name"],
-                "course": student["course"],
-                "status": new_status
-            }
-            sync_to_google_sheets(sync_data)
-    
+    if student:
+        sync_data = {
+            "date": target_date,
+            "time": datetime.now().strftime("%H:%M:%S"),
+            "reg_no": student["register_number"],
+            "name": student["name"],
+            "course": student["course"],
+            "status": new_status
+        }
+        sync_to_google_sheets(sync_data)
     flash(f"Attendance updated to {new_status}.", "success")
     return redirect(url_for("admin_dashboard", date=target_date))
-
 
 @app.route("/admin/add_student", methods=["POST"])
 @admin_required
 def admin_add_student():
-    reg_no   = request.form.get("register_number", "").strip().upper()
-    name     = request.form.get("name", "").strip()
-    course   = request.form.get("course", "").strip().upper()
-    mobile   = request.form.get("mobile", "").strip()
+    reg_no = request.form.get("register_number", "").strip().upper()
+    name = request.form.get("name", "").strip()
+    course = request.form.get("course", "").strip().upper()
+    mobile = request.form.get("mobile", "").strip()
     password = request.form.get("password", "123456")
-    
     if not reg_no or not name:
         flash("Register number and name are required.", "danger")
         return redirect(url_for("admin_dashboard"))
-        
     hashed_pw = generate_password_hash(password)
     try:
-        with get_db() as conn:
-            conn.execute(
-                """INSERT INTO students (register_number, name, course, mobile, password)
-                   VALUES (?, ?, ?, ?, ?)""",
-                (reg_no, name, course, mobile, hashed_pw)
-            )
+        students_collection.insert_one({
+            "register_number": reg_no,
+            "name": name,
+            "course": course,
+            "mobile": mobile,
+            "password": hashed_pw,
+            "teacher_username": session.get("admin_username")
+        })
         flash(f"Student {name} added successfully.", "success")
-    except sqlite3.IntegrityError:
+    except Exception as e:
         flash("Register number already exists.", "danger")
-        
     return redirect(url_for("admin_dashboard"))
 
-
-@app.route("/admin/delete_student/<int:student_id>", methods=["POST"])
+@app.route("/admin/delete_student/<string:student_id>", methods=["POST"])
 @admin_required
 def admin_delete_student(student_id):
-    with get_db() as conn:
-        # Delete attendance first due to foreign key
-        conn.execute("DELETE FROM attendance WHERE student_id = ?", (student_id,))
-        conn.execute("DELETE FROM students WHERE id = ?", (student_id,))
+    student = students_collection.find_one({"_id": ObjectId(student_id)})
+    if not student:
+        flash("Student not found.", "danger")
+        return redirect(url_for("admin_dashboard"))
+        
+    current_teacher = session.get("admin_username")
+    student_teacher = student.get("teacher_username") or "admin"
+    if student_teacher != current_teacher and session.get("admin_role") != "Super Admin":
+        flash("Access denied: You do not own this student.", "danger")
+        return redirect(url_for("admin_dashboard"))
+        
+    attendance_collection.delete_many({"student_id": ObjectId(student_id)})
+    students_collection.delete_one({"_id": ObjectId(student_id)})
     flash("Student and their attendance records deleted.", "info")
     return redirect(url_for("admin_dashboard"))
 
+@app.route("/admin/add_teacher", methods=["POST"])
+@admin_required
+@super_admin_required
+def admin_add_teacher():
+    username = request.form.get("teacher_username", "").strip().lower()
+    name = request.form.get("teacher_name", "").strip()
+    password = request.form.get("teacher_password", "")
+    role = request.form.get("teacher_role", "Teacher")
+    
+    if not username or not name or len(password) < 6:
+        flash("Username, name, and password (min 6 chars) are required.", "danger")
+        return redirect(url_for("admin_dashboard"))
+        
+    existing = teachers_collection.find_one({"username": username})
+    if existing:
+        flash("Username already exists.", "danger")
+        return redirect(url_for("admin_dashboard"))
+        
+    save_teacher({
+        "username": username,
+        "name": name,
+        "password": generate_password_hash(password),
+        "role": role
+    })
+    flash(f"Teacher/Admin account for {name} created successfully.", "success")
+    return redirect(url_for("admin_dashboard"))
+
+@app.route("/admin/delete_teacher/<string:username>", methods=["POST"])
+@admin_required
+@super_admin_required
+def admin_delete_teacher(username):
+    username = username.strip().lower()
+    if username == session.get("admin_username"):
+        flash("You cannot delete your own account.", "danger")
+        return redirect(url_for("admin_dashboard"))
+        
+    if username == "admin":
+        flash("The default admin account cannot be deleted.", "danger")
+        return redirect(url_for("admin_dashboard"))
+        
+    teacher = teachers_collection.find_one({"username": username})
+    if teacher:
+        delete_teacher(username)
+        flash(f"Deleted account for {teacher['name']}.", "info")
+    else:
+        flash("Account not found.", "danger")
+    return redirect(url_for("admin_dashboard"))
 
 @app.route("/admin/generate_pin", methods=["POST"])
 @admin_required
 def generate_pin():
     global CURRENT_PIN
-    # Generate random 4-digit PIN
     CURRENT_PIN = random.randint(1000, 9999)
     flash(f"New OTP PIN generated: {CURRENT_PIN}", "success")
     return redirect(url_for("admin_dashboard"))
 
-
 @app.route("/admin/export_excel")
 @admin_required
 def export_excel():
-    target_date = request.args.get("date", date.today().isoformat())
+    from openpyxl.styles import PatternFill
     
-    with get_db() as conn:
-        records = conn.execute("""
-            SELECT s.register_number, s.name, s.course, a.status
-            FROM students s
-            LEFT JOIN attendance a ON s.id = a.student_id AND a.date = ?
-            ORDER BY s.register_number ASC
-        """, (target_date,)).fetchall()
-
-    # Create workbook
+    # 1. Fetch all unique dates sorted chronologically
+    sorted_dates = sorted(list(attendance_collection.distinct("date")))
+    
+    # 2. Fetch all students sorted by register number belonging to current teacher
+    current_teacher = session.get("admin_username")
+    if current_teacher == "admin":
+        student_query = {"$or": [{"teacher_username": "admin"}, {"teacher_username": {"$exists": False}}]}
+    else:
+        student_query = {"teacher_username": current_teacher}
+        
+    students = list(students_collection.find(student_query, {"register_number": 1, "name": 1, "course": 1, "balance": 1}).sort("register_number", 1))
+    
+    # 3. Fetch all attendance records
+    attendance_records = list(attendance_collection.find())
+    
+    # 4. Map (student_id_str, date) -> status
+    att_map = {}
+    for r in attendance_records:
+        att_map[(str(r["student_id"]), r["date"])] = r["status"]
+        
     wb = openpyxl.Workbook()
     ws = wb.active
-    ws.title = f"Attendance_{target_date}"
-
+    ws.title = "Master Attendance"
+    
     # Headers
-    headers = ["Register Number", "Name", "Course", "Status"]
+    headers = ["Register Number", "Name", "Course", "Outstanding Balance"]
+    formatted_dates = []
+    for d in sorted_dates:
+        try:
+            fd = datetime.strptime(d, "%Y-%m-%d").strftime("%d/%m/%Y")
+        except Exception:
+            fd = d
+        formatted_dates.append(fd)
+        
+    headers.extend(formatted_dates)
     ws.append(headers)
     
     # Style headers
+    header_fill = PatternFill(start_color="4F46E5", end_color="4F46E5", fill_type="solid")
+    header_font = Font(name="Inter", size=11, bold=True, color="FFFFFF")
     for cell in ws[1]:
-        cell.font = Font(bold=True)
-
-    # Data
-    for row in records:
-        ws.append([row["register_number"], row["name"], row["course"], row["status"] or "Not Marked"])
-
-    # Column widths
+        cell.font = header_font
+        cell.fill = header_fill
+        
+    # Soft fills for statuses
+    present_fill = PatternFill(start_color="D1FAE5", end_color="D1FAE5", fill_type="solid")
+    absent_fill = PatternFill(start_color="FEE2E2", end_color="FEE2E2", fill_type="solid")
+    not_marked_fill = PatternFill(start_color="F3F4F6", end_color="F3F4F6", fill_type="solid")
+    
+    present_font = Font(name="Inter", size=10, color="065F46")
+    absent_font = Font(name="Inter", size=10, color="991B1B")
+    default_font = Font(name="Inter", size=10, color="1F2937")
+    
+    # Populate student rows
+    row_num = 2
+    for s in students:
+        sid = str(s["_id"])
+        row_data = [
+            s.get("register_number"),
+            s.get("name"),
+            s.get("course"),
+            s.get("balance", 0)
+        ]
+        
+        # Append status for each date
+        for d in sorted_dates:
+            status = att_map.get((sid, d), "Not Marked")
+            row_data.append(status)
+            
+        ws.append(row_data)
+        
+        # Style cells in the row
+        ws.cell(row=row_num, column=1).font = Font(name="Inter", size=10, bold=True)
+        ws.cell(row=row_num, column=2).font = default_font
+        ws.cell(row=row_num, column=3).font = default_font
+        
+        # Style Balance cell
+        bal_cell = ws.cell(row=row_num, column=4)
+        bal_val = row_data[3]
+        bal_cell.font = Font(name="Inter", size=10, bold=True, color="991B1B" if bal_val > 0 else "065F46")
+        
+        # Style daily status cells
+        for col_idx, d in enumerate(sorted_dates, start=5):
+            cell = ws.cell(row=row_num, column=col_idx)
+            status = cell.value
+            if status == "Present":
+                cell.fill = present_fill
+                cell.font = present_font
+            elif status == "Absent":
+                cell.fill = absent_fill
+                cell.font = absent_font
+            else:
+                cell.fill = not_marked_fill
+                cell.font = default_font
+                
+        row_num += 1
+        
+    # Auto-adjust column widths
     ws.column_dimensions['A'].width = 20
     ws.column_dimensions['B'].width = 25
     ws.column_dimensions['C'].width = 15
-    ws.column_dimensions['D'].width = 15
-
-    # Stream file
+    ws.column_dimensions['D'].width = 22
+    
+    for col_idx in range(5, len(headers) + 1):
+        col_letter = openpyxl.utils.get_column_letter(col_idx)
+        ws.column_dimensions[col_letter].width = 15
+        
+    ws.views.sheetView[0].showGridLines = True
+    
     output = io.BytesIO()
     wb.save(output)
     output.seek(0)
     
-    filename = f"Attendance_{target_date}.xlsx"
-    return send_file(output, as_attachment=True, download_name=filename, mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-
+    filename = f"Master_Attendance_Report_{date.today().isoformat()}.xlsx"
+    return send_file(output, as_attachment=True, download_name=filename,
+                     mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
 @app.route("/admin/clear_db", methods=["POST"])
 @admin_required
+@super_admin_required
 def clear_db():
     pw1 = request.form.get("password1")
     pw2 = request.form.get("password2")
     confirm = request.form.get("confirm")
-    
     if pw1 == ADMIN_PASSWORD and pw2 == ADMIN_CLEAR_SECRET and confirm == "yes":
-        with get_db() as conn:
-            conn.execute("DELETE FROM attendance")
-            conn.execute("DELETE FROM students")
+        attendance_collection.delete_many({})
+        students_collection.delete_many({})
         flash("Database cleared successfully (all students and attendance deleted).", "success")
     else:
         flash("Incorrect passwords or confirmation not provided. Action aborted.", "danger")
-        
     return redirect(url_for("admin_dashboard"))
+
+@app.route("/admin/manage_money/<string:student_id>", methods=["GET", "POST"])
+@admin_required
+def manage_money(student_id):
+    student = students_collection.find_one({"_id": ObjectId(student_id)})
+    if not student:
+        flash("Student not found.", "danger")
+        return redirect(url_for("admin_dashboard"))
+
+    # Ownership Check
+    current_teacher = session.get("admin_username")
+    student_teacher = student.get("teacher_username") or "admin"
+    if student_teacher != current_teacher and session.get("admin_role") != "Super Admin":
+        flash("Access denied: You do not own this student.", "danger")
+        return redirect(url_for("admin_dashboard"))
+
+    if request.method == "POST":
+        action = request.form.get("action")
+        prev_balance = float(student.get("balance", 0))
+
+        if action == "direct_update":
+            try:
+                new_balance = float(request.form.get("new_balance", 0))
+                note = request.form.get("note", "Manual balance adjustment").strip() or "Manual balance adjustment"
+                change = new_balance - prev_balance
+                
+                transaction = {
+                    "date": datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+                    "type": "Direct Adjustment",
+                    "amount": change,
+                    "prev_balance": prev_balance,
+                    "new_balance": new_balance,
+                    "note": note
+                }
+                
+                students_collection.update_one(
+                    {"_id": ObjectId(student_id)},
+                    {
+                        "$set": {"balance": new_balance},
+                        "$push": {"payment_history": transaction}
+                    }
+                )
+                flash(f"Balance directly updated to {new_balance}.", "success")
+            except Exception as e:
+                flash(f"Error updating balance: {e}", "danger")
+
+        elif action == "record_payment":
+            try:
+                amount_given = float(request.form.get("amount_given", 0))
+                payment_note = request.form.get("payment_note", "Fees payment").strip() or "Fees payment"
+                new_balance = prev_balance - amount_given
+                
+                transaction = {
+                    "date": datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+                    "type": "Payment Received",
+                    "amount": amount_given,
+                    "prev_balance": prev_balance,
+                    "new_balance": new_balance,
+                    "note": payment_note
+                }
+                
+                students_collection.update_one(
+                    {"_id": ObjectId(student_id)},
+                    {
+                        "$set": {"balance": new_balance},
+                        "$push": {"payment_history": transaction}
+                    }
+                )
+                flash(f"Recorded payment of {amount_given}. Outstanding balance is now {new_balance}.", "success")
+            except Exception as e:
+                flash(f"Error recording payment: {e}", "danger")
+
+        # Refetch student
+        student = students_collection.find_one({"_id": ObjectId(student_id)})
+
+    return render_template("admin_manage_money.html", student=student)
+
+@app.route("/admin/edit_student/<string:student_id>", methods=["GET", "POST"])
+@admin_required
+def edit_student(student_id):
+    student = students_collection.find_one({"_id": ObjectId(student_id)})
+    if not student:
+        flash("Student not found.", "danger")
+        return redirect(url_for("admin_dashboard"))
+    
+    # Ownership Check
+    current_teacher = session.get("admin_username")
+    student_teacher = student.get("teacher_username") or "admin"
+    if student_teacher != current_teacher and session.get("admin_role") != "Super Admin":
+        flash("Access denied: You do not own this student.", "danger")
+        return redirect(url_for("admin_dashboard"))
+        
+    teachers = load_teachers()
+    
+    if request.method == "POST":
+        reg_no = request.form.get("register_number", "").strip().upper()
+        name = request.form.get("name", "").strip()
+        course = request.form.get("course", "").strip().upper()
+        mobile = request.form.get("mobile", "").strip()
+        new_password = request.form.get("password", "").strip()
+        teacher_username = request.form.get("teacher_username", student_teacher).strip().lower()
+        
+        if not reg_no or not name or not course:
+            flash("Register number, name, and course are required.", "danger")
+            return render_template("admin_edit_student.html", student=student, teachers=teachers)
+        
+        if teacher_username not in teachers:
+            teacher_username = student_teacher
+            
+        update_data = {
+            "register_number": reg_no,
+            "name": name,
+            "course": course,
+            "mobile": mobile,
+            "teacher_username": teacher_username
+        }
+        
+        if new_password:
+            update_data["password"] = generate_password_hash(new_password)
+            
+        try:
+            students_collection.update_one({"_id": ObjectId(student_id)}, {"$set": update_data})
+            flash(f"Student profile for {name} updated successfully.", "success")
+            return redirect(url_for("admin_dashboard"))
+        except Exception as e:
+            flash("Error: Register number already exists or database error occurred.", "danger")
+            
+    return render_template("admin_edit_student.html", student=student, teachers=teachers)
+
+# ─────────────────────────────────────────
+# Student Update Teacher Route
+# ─────────────────────────────────────────
+@app.route("/update_student_teacher", methods=["POST"])
+@login_required
+def update_student_teacher():
+    student_id = session["student_id"]
+    teacher_username = request.form.get("teacher_username", "").strip().lower()
+    teachers = load_teachers()
+    
+    if teacher_username in teachers:
+        students_collection.update_one(
+            {"_id": ObjectId(student_id)},
+            {"$set": {"teacher_username": teacher_username}}
+        )
+        flash(f"Assigned teacher updated to {teachers[teacher_username]['name']}.", "success")
+    else:
+        flash("Invalid teacher selected.", "danger")
+        
+    return redirect(url_for("dashboard"))
 
 # ─────────────────────────────────────────
 # Entry Point
 # ─────────────────────────────────────────
 if __name__ == "__main__":
-    init_db()          # Create tables on startup
-    app.run(debug=True)
+    app.run(debug=True,host='0.0.0.0')
